@@ -3,6 +3,7 @@ extern crate gtk;
 extern crate glib;
 extern crate image;
 
+use gio::prelude::*;
 use gtk::prelude::*;
 
 use gtk::{Application, ApplicationWindow, Builder};
