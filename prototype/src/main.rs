@@ -1,5 +1,4 @@
 
-
 use image::{ImageBuffer, Rgba, Pixel};
 use std::env;
 use std::error::Error;
@@ -7,7 +6,22 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 
+mod gui;
+
 fn main() {
+
+    // GUI 
+    let application = Application::new(Some("com.example.video_uploader"), Default::default())
+    .expect("Failed to initialize GTK application");
+
+    application.connect_activate(|app| {
+        build_ui(app);
+    });
+
+    application.run(&args().collect::<Vec<_>>());
+
+    // ENCODER
+
     // Read the input file into a Vec<u8>
     let mut input_file = File::open("testfiles/enwik9").unwrap();
     let mut input_data = Vec::new();
