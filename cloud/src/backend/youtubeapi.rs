@@ -155,7 +155,7 @@ impl Api {
             // encode the file
             let file = FileInfo::new(&file_path);
             let encoder = Encode::new(file.clone(), (1280, 720), 4, 4);
-            let encoded_file = Encode::encoder(encoder);
+            Encode::encoder(encoder);
             
             tokio::spawn(async move {
 
