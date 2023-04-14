@@ -1,0 +1,23 @@
+[package]
+name = "cloud"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+hyper = { version = "*", features = ["full"] }
+hyper-rustls = "0.24.0"
+google-youtube3 = "*"
+
+tokio = { version = "1.27.0", features = ["rt-multi-thread"] }
+yup-oauth2 = "*"
+tokio-util = { version = "*", features = ["codec", "io"] }
+mime = "*"
+futures = "*"
+open = "*"
+mp4parse = "*"
+chrono = "*"
+image = "*"
+indicatif = "*"
+rayon = "*"
