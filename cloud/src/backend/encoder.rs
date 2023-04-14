@@ -41,7 +41,7 @@ impl Encode {
             .unwrap()
             .set_style(ProgressStyle::default_bar().template("{elapsed_precise} [{bar:40.cyan/blue}] {percent}% {bytes}/{total_bytes}  ({eta})").unwrap());
     
-         //Calculate number of frames needed to contain every bit from the specified file
+        //Calculate number of frames needed to contain every bit from the specified file
         let frame_size: usize = (encode.res.0 * encode.res.1) / (encode.square_w * encode.square_h);
         let num_bits = file_size * 8;
         let num_frames = (num_bits + frame_size  - 1) / frame_size;
@@ -50,7 +50,7 @@ impl Encode {
         let title = &format!("title={}", FileInfo::name(&encode.file));
         let datatype = &format!("author={}", FileInfo::datatype(&encode.file));
         let date = &format!("time={}", FileInfo::date(&encode.file));
-        let output = &format!("output/{}.mp4", title);
+        let output = &format!("output/{}.mp4", FileInfo::name(&encode.file));
     
         // Convert the frames to an MP4 video using FFmpeg
         let ffmpeg = Command::new("ffmpeg")
@@ -59,7 +59,7 @@ impl Encode {
                 "-framerate", "30",
                 "-f", "rawvideo",
                 "-pix_fmt", "rgb24",
-                "-s", &format!("{}x{}", encode.res.0,  encode.res.0),
+                "-s", &format!("{}x{}", encode.res.0,  encode.res.1),
                 "-i", "-",
                 "-c:v", "libx264",
                 "-crf", "18",
