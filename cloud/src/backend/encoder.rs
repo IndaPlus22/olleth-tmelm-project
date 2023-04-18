@@ -30,16 +30,16 @@ impl Encode {
         }
     }
 
-    pub fn encoder(encode: Encode) {
+    pub fn encoder(encode: Encode) -> String {
    
         //Get file size
         let file_size = FileInfo::size(&encode.file);
     
         // Create a progress bar
-        let pb = Arc::new(Mutex::new(ProgressBar::new(file_size as u64)));
-        pb.lock()
-            .unwrap()
-            .set_style(ProgressStyle::default_bar().template("{elapsed_precise} [{bar:40.cyan/blue}] {percent}% {bytes}/{total_bytes}  ({eta})").unwrap());
+        // let pb = Arc::new(Mutex::new(ProgressBar::new(file_size as u64)));
+        // pb.lock()
+        //     .unwrap()
+        //     .set_style(ProgressStyle::default_bar().template("{elapsed_precise} [{bar:40.cyan/blue}] {percent}% {bytes}/{total_bytes}  ({eta})").unwrap());
     
         //Calculate number of frames needed to contain every bit from the specified file
         let frame_size: usize = (encode.res.0 * encode.res.1) / (encode.square_w * encode.square_h);
@@ -116,14 +116,14 @@ impl Encode {
                     let mut process = ffmpeg_process.lock().unwrap();
                     process.stdin.as_mut().unwrap().write_all(&frame.into_raw()).unwrap();
                 }
-                pb.lock().unwrap().inc(chunk.len() as u64);
+                //pb.lock().unwrap().inc(chunk.len() as u64);
     
                 // Release used memory
                 drop(chunk);
                 drop(input_file);
     
             });
-    
+        output.to_string()
     }
 }
 

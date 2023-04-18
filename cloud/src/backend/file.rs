@@ -26,7 +26,6 @@ impl Clone for FileInfo {
 impl FileInfo {
 
     pub fn new(path: &Path) -> FileInfo {
-        println!("{}", path.display());
         let name = match path.file_name() {
             Some(n) => n.to_string_lossy().into_owned(),
             None => "".to_string(),

@@ -5,9 +5,13 @@ use hyper::client::HttpConnector;
 use youtube3::api::{Video, PlaylistItem, Playlist};
 use youtube3::{Error as YoutubeError, YouTube};
 use std::collections::HashMap;
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use mime::Mime;
-use std::fs::{self};
+use std::fs::{self, File};
+use std::thread;
+use std::time::Duration;
+use indicatif::{ProgressBar, ProgressStyle};
 
 use walkdir::WalkDir;
 
@@ -18,7 +22,7 @@ pub struct Api {
     hub: YouTube<hyper_rustls::HttpsConnector<HttpConnector>>,
 }
 
-struct Mp4 {
+pub struct Mp4 {
     path: PathBuf,
     title: String,
     datatype: String,
@@ -26,7 +30,7 @@ struct Mp4 {
 }
 
 impl Mp4 {
-    fn new(path: &Path, title: &str, datatype: &str, size: u32) -> Self {
+    pub fn new(path: &Path, title: &str, datatype: &str, size: u32) -> Self {
         Mp4 {
             path: path.to_path_buf(),
             title: title.to_owned(),
@@ -57,14 +61,18 @@ impl Api {
         .build();
 
         // Define the scopes your application requires access to
-        let scopes = &["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.force-ssl"];
+        let scopes = &["https://www.googleapis.com/auth/youtube", "https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.force-ssl", "https://www.googleapis.com/auth/youtube.download"];
 
-        let token = auth.token(scopes).await.expect("failed to retrieve token").token().clone().unwrap().to_string();
+        let token = auth.token(scopes).await.expect("failed to retrieve token");
+        println!("{:?}", token.expiration_time());
+        println!("{:?}", token.is_expired());
 
         let hub = YouTube::new(
             hyper::Client::builder().build::<_, hyper::Body>(https),
-            token,
+            token.token().clone().unwrap().to_string(),
         );
+
+        
         
 
         Api { hub }
@@ -74,12 +82,30 @@ impl Api {
         return self.hub.clone();
     }
 
+    pub fn convert_bytes(bytes: u64) -> String {
+        const KB: f64 = 1024.0;
+        const MB: f64 = KB * 1024.0;
+        const GB: f64 = MB * 1024.0;
+    
+        if bytes < KB as u64 {
+            format!("{} bytes", bytes)
+        } else if bytes < MB as u64 {
+            format!("{:.2} KB", bytes as f64 / KB)
+        } else if bytes < GB as u64 {
+            format!("{:.2} MB", bytes as f64 / MB)
+        } else {
+            format!("{:.2} GB", bytes as f64 / GB)
+        }
+    }
 
-    pub async fn search(hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>, part: &Vec<String>, query: &str, max: u32) {
+
+    pub async fn search(hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>, part: &Vec<String>, query: &str, max: u32) -> HashMap<String, String> {
         let result = hub.search().list(part)
             .q(query)
             .max_results(max)
              .doit().await;
+
+        let mut video_map: HashMap<String, String> = HashMap::new();
 
         match result {
             Err(e) => match e {
@@ -100,35 +126,33 @@ impl Api {
             Ok(res) => { 
                 for item in res.1.items.unwrap_or_else(Vec::new) {
                     let video = item.snippet.unwrap();
-                    println!("\nNew Video ---------------------------");
-                    println!("Title: {}", video.title.unwrap());
-                    println!("Date: {}", video.published_at.unwrap());
-                    println!("-------------------------------------");
-                    println!("Channel: {}", video.channel_title.unwrap());
-                    println!("id: {}", video.channel_id.unwrap());
-                    println!("-------------------------------------");
-                    println!("Description {}", video.description.unwrap());      
+
+                    video_map.insert(video.title.unwrap(), video.description.unwrap());
+                    
                 }
             },
-        }
+        };
+
+        video_map
     }
 
-    async fn upload(mp4: Mp4, hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn upload(mp4: Mp4, hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+
 
         // create a new video
         let video = youtube3::api::Video {
             snippet: Some(youtube3::api::VideoSnippet {
-                title: Some(mp4.title.to_owned()),
-                description: Some((format!("datatype: {}\npath: {:?}\n size: {}", mp4.datatype, mp4.path, mp4.size)).to_owned()),
-
+                title: Some(Path::new(&mp4.title).with_extension("").display().to_string()),
+                description: Some((format!("name: {}\ndatatype: {}\nsize: {}", mp4.title, mp4.datatype, Self::convert_bytes(mp4.size as u64))).to_owned()),
+                tags: Some(vec![mp4.title, mp4.datatype, Self::convert_bytes(mp4.size as u64)]),
                 ..Default::default()
             }),
             status: Some(youtube3::api::VideoStatus {
-                privacy_status: Some("private".to_owned()),
+                privacy_status: Some("public".to_owned()),
+                self_declared_made_for_kids: Some(true),
                 ..Default::default()
             }),
             ..Default::default()
-
         };
 
         // read the video file
@@ -145,6 +169,36 @@ impl Api {
             );
         let (_, response) = insert_request.await?;
         Ok(response.id.expect("missing video ID"))
+    }
+
+    pub async fn single_upload(
+        file_path: &Path, 
+        hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        
+
+        // encode the file
+        let file = FileInfo::new(&file_path);
+        let output = Encode::encoder(Encode::new(file.clone(), (1280, 720), 4, 4));
+
+        println!("Sleeping for 10 seconds...");
+        thread::sleep(Duration::from_secs(10));
+        println!("Done sleeping!");
+
+        // create an Mp4 instance from the encoded file
+        let mp4 = Mp4::new(Path::new(&output), file.clone().name(), file.clone().datatype(), file.clone().size().try_into().unwrap());
+
+        let result = Self::upload(mp4, &hub).await;
+            match result {
+                Ok(video_id) => {
+                    println!("Video uploaded: https://www.youtube.com/watch?v={}", video_id);
+                }
+                Err(error) => {
+                    eprintln!("Error uploading video: {:?}", error.to_string());
+                }
+            }
+
+        Ok(())
     }
 
     pub async fn multiple_uploads(
@@ -166,13 +220,12 @@ impl Api {
 
             // encode the file
             let file = FileInfo::new(&file_path);
-            let encoder = Encode::new(file.clone(), (1280, 720), 4, 4);
-            Encode::encoder(encoder);
+            let output = Encode::encoder(Encode::new(file.clone(), (1280, 720), 4, 4));
             
             tokio::spawn(async move {
 
                 // create an Mp4 instance from the encoded file
-                let mp4 = Mp4::new(&file_path, file.clone().name(), file.clone().datatype(), file.clone().size().try_into().unwrap());
+                let mp4 = Mp4::new(Path::new(&output), file.clone().name(), file.clone().datatype(), file.clone().size().try_into().unwrap());
 
                 let result = Self::upload(mp4, &hub).await;
                 match result {
@@ -201,50 +254,62 @@ impl Api {
 
         
         //let mut tasks = Vec::new();
+
+        let cut_path = Path::new(path.file_name().unwrap());
     
         let mut playlist_map: HashMap<(PathBuf, String), Vec<PathBuf>> = HashMap::new(); // keep track of playlists and their parent directories
         let mut files: Vec<_> = Vec::new();
 
         // collect a list of all files in the directory and its subdirectories 
-        for entry in WalkDir::new(Path::new(&path.file_name().unwrap())) {
+        for entry in WalkDir::new(&cut_path) {
             let entry = entry?;
             if entry.path().is_file() {
                 files.push(entry);
             } else if entry.path().is_dir() {
                 //let playlist_name = entry.file_name().to_string_lossy().to_string();
-                let parent_path = entry.path().parent().unwrap().to_string_lossy().to_string();
-                playlist_map.insert((entry.path().to_path_buf(), parent_path), Vec::new());
+                let parent_path = entry.path().strip_prefix(&cut_path).unwrap().parent().map_or_else(|| String::from(""), |p| p.to_string_lossy().to_string());
+                playlist_map.insert((entry.path().strip_prefix(&cut_path).unwrap().to_path_buf(), parent_path), Vec::new());
             }
         }
 
         // add each file to the appropriate playlist
         for entry in files {
-            let file_path = entry.path();
-            let dir_name = file_path.parent().unwrap().to_path_buf();
-            let parent_path = file_path.parent().unwrap().parent().unwrap().to_string_lossy().to_string();
-            if let Some(playlist) = playlist_map.get_mut(&(dir_name, parent_path)) {
-                playlist.push(file_path.to_path_buf());
+            let file_path = entry.path().strip_prefix(&cut_path).unwrap();
+            let dir_name = file_path.parent().map_or_else(|| "".into(), |p| p.to_path_buf());
+
+            println!("{:?}",  &dir_name);
+            println!("{:?}",  &dir_name.to_string_lossy().to_string());
+            let parent_path = dir_name.parent().and_then(|p| p.file_name()).map_or("".to_string(), |n| n.to_string_lossy().to_string());
+            if let Some(playlist) = playlist_map.get_mut(&(dir_name.clone(), parent_path)) {
+                 playlist.push(file_path.to_path_buf());
             }
         }
-
-        // run the upload tasks and playlist creation tasks concurrently
+        
+        //run the upload tasks and playlist creation tasks concurrently
         let mut tasks = Vec::new();
         for ((playlist_name, parent_path), playlist_files) in playlist_map {
             if !playlist_files.is_empty() {
+                let path = cut_path.clone().to_path_buf();
                 let hub = hub.clone(); // clone the hub to move into the closure
                 tasks.push(tokio::spawn( async move {
-                    let playlist_id = Api::create_playlist(&hub, playlist_name, parent_path, "public").await.unwrap();
-                    println!("Playlist created: https://www.youtube.com/playlist?list={:?}", playlist_id);
+
+                    let mut playlist_id = "".to_string();
+                    if !playlist_name.to_string_lossy().to_string().is_empty() {
+                        playlist_id = Api::create_playlist(&hub, playlist_name, parent_path, "public").await.unwrap();
+                        println!("Playlist created: https://www.youtube.com/playlist?list={:?}", playlist_id);
+                    }
 
                     for file_path in playlist_files {
-                        let file = FileInfo::new(&file_path);
+                        let file = FileInfo::new(&path.join(&file_path));
                         let encoder = Encode::new(file.clone(), (1280, 720), 4, 4);
-                        Encode::encoder(encoder);
-                        //let mp4 = Mp4::new(&file_path, file.clone().name(), file.clone().datatype(), file.clone().size().try_into().unwrap());
-                        // let video_id = Api::upload(mp4, &hub).await.expect("upload video error");
-                        // println!("Video uploaded: https://www.youtube.com/watch?v={:?}", video_id);
-                        // Api::add_to_playlist(&video_id, &playlist_id, &hub).await.expect("error when adding to playlist");
-                        // println!("Video added to playlist: https://www.youtube.com/playlist?list={:?}", playlist_id);
+                        let mp4_path = Encode::encoder(encoder);
+                        let mp4 = Mp4::new(Path::new(&mp4_path), file.clone().name(), file.clone().datatype(), file.clone().size().try_into().unwrap());
+                        let video_id = Api::upload(mp4, &hub).await.expect("upload video error");
+                        println!("Video uploaded: https://www.youtube.com/watch?v={:?}", video_id);
+                        if !playlist_id.is_empty() {
+                            Api::add_to_playlist(&video_id, &playlist_id, &hub).await.expect("error when adding to playlist");
+                            println!("Video added to playlist: https://www.youtube.com/playlist?list={:?}", playlist_id);
+                        }
                     }
                 }));
             }
