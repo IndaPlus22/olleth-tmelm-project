@@ -8,9 +8,11 @@ In the cloud storage program, yt-dlp is used to download videos from YouTube and
 **Windows**
 1. Download the latest Windows executable from the yt-dlp [release page](https://github.com/yt-dlp/yt-dlp/releases).
 2. Move the executable to a location in your PATH environment variable.
+
 **macOS**
 1. Install Homebrew by following the instructions on the [Homebrew website](https://brew.sh).
 2. Open a Terminal window and enter the following command to install yt-dlp: brew install yt-dlp.
+
 **Linux**
 yt-dlp can be installed on most Linux distributions through the package manager. For example, on Ubuntu and Debian-based systems, open a Terminal window and enter the following command: `sudo apt install yt-dlp`.
 
@@ -24,9 +26,11 @@ In the cloud storage program, FFmpeg is used to convert the audio and video stre
 **Windows**
 1. Download the latest Windows build of FFmpeg from the official [FFmpeg website](https://ffmpeg.org/download.html#build-windows).
 2. Extract the downloaded ZIP file to a directory in your PATH environment variable.
+
 **macOS**
 1. Install Homebrew by following the instructions on the [Homebrew website](https://brew.sh).
 2. Open a Terminal window and enter the following command to install FFmpeg: brew install ffmpeg.
+
 **Linux**
 FFmpeg can be installed on most Linux distributions through the package manager. For example, on Ubuntu and Debian-based systems, open a Terminal window and enter the following command: `sudo apt install ffmpeg`.
 
