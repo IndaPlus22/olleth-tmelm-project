@@ -2,7 +2,7 @@
 
 
 # Public Functions of Api
-The Api struct provides a high-level interface to the YouTube Data API v3, allowing users to authenticate with Google and perform operations such as uploading videos and searching for videos. The struct has the following public functions:
+The Api struct provides a high-level interface to the YouTube Data API v3, allowing users to authenticate with Google and perform operations such as uploading, downloading and searching for videos. The struct has the following public functions:
 
 ##  New
 The `new` function is a constructor for the Api struct that takes a path to a client secret file and returns a new Api instance. This function authenticates the user using the OAuth2 installed flow, reads the client secret file, and retrieves an access token. It also sets the expiration time for the access token and creates a new instance of the YouTube struct, which is used to make requests to the YouTube Data API v3.
@@ -48,6 +48,16 @@ let api = Api::new("/path/to/client_secret.json").unwrap();
 let youtube = api.get_hub();
 youtube.upload("/path/to/file.mp4").unwrap();
 ```
+Note: This function use the ffmpeg program to turn a files bytes into rgb frames. You need to install ffmpeg on your system and make sure it's in your system's path for this function to work.
+`ffmpeg` is a free and open-source software that is widely used for handling multimedia files. It can be used for tasks such as converting video and audio files, resizing and cropping videos, and more.
+
+To install `ffmpeg`, you can follow the instructions for your specific operating system. Here are a few examples:
+
+- **Windows**: You can download a pre-built binary from the official website: https://ffmpeg.org/download.html#build-windows. Make sure to add the `bin` directory to your system's `PATH` environment variable so that the `ffmpeg` command can be run from any directory in your terminal.
+- **MacOS**: You can install `ffmpeg` using Homebrew: `brew install ffmpeg`.
+- **Linux**: You can install `ffmpeg` using your distribution's package manager. For example, on Ubuntu, you can run `sudo apt-get install ffmpeg`.
+
+After installing `ffmpeg`, you should be able to use the `upload` function to upload your video to YouTube.
 
 ## Download
 download function: This function downloads a YouTube video given its ID to a specified output folder. 
