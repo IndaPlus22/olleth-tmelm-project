@@ -2,7 +2,6 @@ extern crate google_youtube3 as youtube3;
 
 use hyper::client::HttpConnector;
 
-use mp4parse::TimeOffsetVersion;
 use youtube3::api::{Video, PlaylistItem, Playlist};
 use youtube3::{Error as YoutubeError, YouTube};
 use std::collections::HashMap; 
@@ -20,11 +19,13 @@ use walkdir::WalkDir;
 use crate::backend::encoder::Encode;
 use crate::backend::file::FileInfo;
 
+/// A struct representing an authenticated Youtube Data API v3 client.
 pub struct Api {
     hub: YouTube<hyper_rustls::HttpsConnector<HttpConnector>>,
     expiration_time: OffsetDateTime,
 }
 
+/// A struct representing an MP4 video file.
 pub struct Mp4 {
     path: PathBuf,
     title: String,
@@ -33,6 +34,14 @@ pub struct Mp4 {
 }
 
 impl Mp4 {
+    /// Constructs a new `Mp4`.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The file path of the MP4 video.
+    /// * `title` - The title of the MP4 video.
+    /// * `datatype` - The data type of the MP4 video.
+    /// * `size` - The size of the MP4 video in bytes.
     pub fn new(path: &Path, title: &str, datatype: &str, size: u32) -> Self {
         Mp4 {
             path: path.to_path_buf(),
@@ -44,6 +53,11 @@ impl Mp4 {
 }
 
 impl Api {
+    /// Constructs a new `Api` with an authenticated Youtube Data API v3 client.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The path to the client secret file.
     pub async fn new(path: &str) -> Self {
         let secret =  yup_oauth2::read_application_secret(path)
         .await
@@ -69,8 +83,6 @@ impl Api {
         let token = auth.token(scopes).await.expect("failed to retrieve token");
 
         let expiration_time = token.expiration_time().unwrap().to_offset(UtcOffset::from_hms(2, 0, 0).expect("could not offset to stockholm time"));
-        
-        println!("{:?}", expiration_time);
 
         let hub = YouTube::new(
             hyper::Client::builder().build::<_, hyper::Body>(https),
@@ -83,10 +95,12 @@ impl Api {
         Api { hub , expiration_time }
     }
 
+    /// Returns the authenticated Youtube Data API v3 client.
     pub fn get_hub(&self) -> YouTube<hyper_rustls::HttpsConnector<HttpConnector>> {
         return self.hub.clone();
     }
 
+    /// Converts a given number of bytes into
     fn convert_bytes(bytes: u64) -> String {
         const KB: f64 = 1024.0;
         const MB: f64 = KB * 1024.0;
@@ -103,7 +117,18 @@ impl Api {
         }
     }
 
-
+    /// Searches for videos on YouTube based on a query and returns a hashmap of the video titles and descriptions.
+    ///
+    /// # Arguments
+    ///
+    /// * `hub` - A reference to the YouTube API client.
+    /// * `part` - A vector of strings representing the parts that the API response should.
+    /// * `query` - A string representing the query to search for on YouTube.
+    /// * `max` - An unsigned 32-bit integer representing the maximum number of results to return.
+    /// 
+    /// # Returns
+    /// 
+    /// A hashmap containing the titles and descriptions of the videos found on YouTube that match the search query.
     pub async fn search(hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>, part: &Vec<String>, query: &str, max: u32) -> HashMap<String, String> {
         let result = hub.search().list(part)
             .q(query)
@@ -141,6 +166,16 @@ impl Api {
         video_map
     }
 
+    /// This function uploads a video to YouTube and returns the video ID on success, or an error on failure.
+    ///
+    /// # Arguments
+    ///
+    /// * `mp4` - An `Mp4` object containing information about the video to upload.
+    /// * `hub` - A reference to a `YouTube` object.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the video ID on success, or an error on failure.
     async fn upload_function(mp4: Mp4, hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
 
 
@@ -176,15 +211,38 @@ impl Api {
         Ok(response.id.expect("missing video ID"))
     }
 
+    /// Uploads a video file to YouTube using the given YouTube API client.
+    ///
+    /// # Arguments
+    ///
+    /// * `file_path` - The path of the video file to upload.
+    /// * `hub` - The YouTube API client to use for the upload.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the upload fails.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use youtube_upload::YouTube;
+    /// use std::path::Path;
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ///     let api = backend::youtubeapi::Api::new("my_api_key").await; 
+    ///     backend::youtubeapi::Api::upload(&Path::new("path/to/my_file.txt"), &mut api.get_hub()).await.expect("failed uploads");
+    ///     Ok(())
+    /// }
+    /// ```
     pub async fn upload(
         file_path: &Path, 
         hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         
-
         // encode the file
         let file = FileInfo::new(&file_path);
-        //let output = Encode::encoder(Encode::new(file.clone(), (1920, 1080), 4, 4));
+        let output = Encode::encoder(Encode::new(file.clone(), (1920, 1080), 4, 4));
 
         // create an Mp4 instance from the encoded file
         let mp4 = Mp4::new(Path::new("output/alpha.txt.mp4"), file.clone().name(), file.clone().datatype(), file.clone().size().try_into().unwrap());
@@ -202,11 +260,30 @@ impl Api {
         Ok(())
     }
 
+    /// Downloads a YouTube video specified by its ID to the given output folder.
+    ///
+    /// # Arguments
+    ///
+    /// * `video_id` - A string slice containing the ID of the YouTube video to download.
+    /// * `output_folder` - A string slice containing the path of the folder to save the downloaded video to.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use my_youtube_lib::YouTube;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let video_id = "dQw4w9WgXcQ";
+    ///     let output_folder = "C:/Users/Username/Videos";
+    ///     backend::youtubeapi::Api::download(video_id, output_folder);
+    /// }
+    /// ```
     pub async fn download(video_id: &str, output_folder: &str) {
         // Construct the URL of the video
         let url = format!("https://www.youtube.com/watch?v={}", video_id);
     
-            // Construct the output file path
+        // Construct the output file path
         let output_file = format!("{}.mp4", video_id);
         let output_path = PathBuf::from(output_folder).join(output_file);
 
@@ -226,7 +303,22 @@ impl Api {
             println!("Error downloading video: {:?}", output.stderr);
         }
     }
-
+    
+    ///
+    /// # Arguments
+    ///
+    /// * `video_id` - A string slice representing the ID of the YouTube video to add to the playlist.
+    /// * `playlist_id` - A string slice representing the ID of the playlist to which the video should be added.
+    /// * `hub` - A reference to a `YouTube<hyper_rustls::HttpsConnector<HttpConnector>>` instance that will be used to make the API request.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing a `PlaylistItem` if the video was added successfully, or an error if the API request failed.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `Box<dyn std::error::Error + Send + Sync>` if the API request fails.
+    ///
     pub async fn add_to_playlist(
         video_id: &str,
         playlist_id: &str,
@@ -251,6 +343,20 @@ impl Api {
         Ok(insert_request)
     }
 
+    /// Removes a video from a playlist given its video ID and playlist item ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `video_id` - A string slice representing the ID of the video to remove.
+    /// * `playlistitem_id` - A string slice representing the ID of the playlist item to remove.
+    /// * `hub` - A reference to a `YouTube` client instance.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Video` struct wrapped in a `Result` indicating whether the operation was successful.
+    /// If the operation was successful, the `Video` struct contains information about the removed video.
+    /// If an error occurred, the `Box<dyn std::error::Error + Send + Sync>` error is returned.
+    ///
     pub async fn remove_from_playlist(
         video_id: &str,
         playlistitem_id: &str,
@@ -269,7 +375,20 @@ impl Api {
         Ok(videos_update_response)
     }
 
-
+    /// Creates a new playlist on YouTube with the specified title, description, and privacy setting.
+    ///
+    /// # Arguments
+    ///
+    /// * `hub` - A reference to a `YouTube` client instance.
+    /// * `path` - A `PathBuf` representing the path of the directory to use as the title of the playlist.
+    /// * `privacy` - A string slice representing the privacy setting of the playlist.
+    ///
+    /// # Returns
+    ///
+    /// Returns a string wrapped in a `Result` indicating whether the operation was successful.
+    /// If the operation was successful, the string contains the ID of the newly created playlist.
+    /// If an error occurred, the `Box<dyn std::error::Error + Send + Sync>` error is returned.
+    ///
     pub async fn create_playlist(
         hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>,
         path: PathBuf,
