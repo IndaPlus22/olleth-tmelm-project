@@ -14,6 +14,7 @@ In the cloud storage program, yt-dlp is used to download videos from YouTube and
 2. Open a Terminal window and enter the following command to install yt-dlp: brew install yt-dlp.
 
 **Linux**
+
 yt-dlp can be installed on most Linux distributions through the package manager. For example, on Ubuntu and Debian-based systems, open a Terminal window and enter the following command: `sudo apt install yt-dlp`.
 
 # FFmpeg
@@ -32,6 +33,7 @@ In the cloud storage program, FFmpeg is used to convert the audio and video stre
 2. Open a Terminal window and enter the following command to install FFmpeg: brew install ffmpeg.
 
 **Linux**
+
 FFmpeg can be installed on most Linux distributions through the package manager. For example, on Ubuntu and Debian-based systems, open a Terminal window and enter the following command: `sudo apt install ffmpeg`.
 
 # API functions
