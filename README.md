@@ -1,11 +1,11 @@
 
 
 
-# Public Functions of Api
+# API functions
 The Api struct provides a high-level interface to the YouTube Data API v3, allowing users to authenticate with Google and perform operations such as uploading, downloading and searching for videos. The struct has the following public functions:
 
 ##  New
-The `new` function is a constructor for the Api struct that takes a path to a client secret file and returns a new Api instance. This function authenticates the user using the OAuth2 installed flow, reads the client secret file, and retrieves an access token. It also sets the expiration time for the access token and creates a new instance of the YouTube struct, which is used to make requests to the YouTube Data API v3.
+The `new` function is a constructor for the `Api` struct that takes a path to a client secret file and returns a new `Api` instance. This function authenticates the user using the OAuth2 installed flow, reads the client secret file, and retrieves an access token. It also sets the expiration time for the access token and creates a new instance of the `YouTube` struct, which is used to make requests to the YouTube Data API v3.
 
 `new(path: &str) -> Result<Self, Error>`
 
@@ -23,7 +23,7 @@ The `search` function is an asynchronous function that takes a YouTube instance,
 `search(hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>, part: &Vec<String>, query: &str, max: u32) -> HashMap<String, String>`
 
 - `hub`: The YouTube instance, needed for making requests to the YouTube Data API v3.
-- `part`: A string representing the parts to include in the API response, such as "snippet" or "contentDetails".
+- `part`: A vector of strings representing the parts to include in the API response, such as "snippet" or "contentDetails".
 - `query`: A string representing the search query.
 - `max`: An integer representing the maximum number of search results to return.
 ### Example:
@@ -31,7 +31,7 @@ The `search` function is an asynchronous function that takes a YouTube instance,
 use youtube_api::Api;
 let api = Api::new("/path/to/client_secret.json").unwrap();
 let youtube = api.get_hub();
-let result = youtube.search("snippet", "rust programming tutorial", 5).unwrap();
+let result = Api::search(&youtube, &vec!["snippet"], "rust programming tutorial", 5).unwrap();
 println!("{:#?}", result);
 ```
 ## Upload
@@ -46,7 +46,7 @@ The `upload` function is an asynchronous function that takes a file path and a Y
 use youtube_api::Api;
 let api = Api::new("/path/to/client_secret.json").unwrap();
 let youtube = api.get_hub();
-youtube.upload("/path/to/file.mp4").unwrap();
+Api::upload("/path/to/file.mp4", &youtube).unwrap();
 ```
 Note: This function use the ffmpeg program to turn a files bytes into rgb frames. You need to install ffmpeg on your system and make sure it's in your system's path for this function to work.
 `ffmpeg` is a free and open-source software that is widely used for handling multimedia files. It can be used for tasks such as converting video and audio files, resizing and cropping videos, and more.
