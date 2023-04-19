@@ -305,14 +305,7 @@ impl Api {
 
         if output.status.success() {
             println!("Video downloaded successfully to {}!", output_path.to_str().unwrap());
-
-            // Delete the video
-            let delete_request = hub.videos()
-            .delete(video_id)
-            .doit()
-            .await
-            .unwrap();
-
+            //Todo! Delete video from youtube after its been downloaded
         } else {
             println!("Error downloading video: {:?}", output.stderr);
         }
