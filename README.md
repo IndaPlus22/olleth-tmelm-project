@@ -1,5 +1,34 @@
+# yt-dlp
+yt-dlp is a command-line program to download videos from YouTube and many other video platforms. It is used in the cloud storage program to download videos from YouTube and convert them to other formats for storage.
 
+## How it's used
+In the cloud storage program, yt-dlp is used to download videos from YouTube and extract the audio and video streams for conversion by FFmpeg. The program takes in a YouTube video URL and passes it to yt-dlp as a command-line argument. The program then uses the downloaded video to create a new video file with the desired format.
 
+## Installation
+**Windows**
+1. Download the latest Windows executable from the yt-dlp [release page](https://github.com/yt-dlp/yt-dlp/releases).
+2. Move the executable to a location in your PATH environment variable.
+**macOS**
+1. Install Homebrew by following the instructions on the [Homebrew website](https://brew.sh).
+2. Open a Terminal window and enter the following command to install yt-dlp: brew install yt-dlp.
+**Linux**
+yt-dlp can be installed on most Linux distributions through the package manager. For example, on Ubuntu and Debian-based systems, open a Terminal window and enter the following command: `sudo apt install yt-dlp`.
+
+# FFmpeg
+FFmpeg is a command-line program to convert audio and video files between different formats. It is used in the cloud storage program to convert downloaded YouTube videos to other formats for storage.
+
+## How it's used
+In the cloud storage program, FFmpeg is used to convert the audio and video streams extracted from a downloaded YouTube video into the desired format. The program takes in the downloaded video and passes it to FFmpeg as a command-line argument. The program then uses the converted streams to create a new video file with the desired format.
+
+## Installation
+**Windows**
+1. Download the latest Windows build of FFmpeg from the official [FFmpeg website](https://ffmpeg.org/download.html#build-windows).
+2. Extract the downloaded ZIP file to a directory in your PATH environment variable.
+**macOS**
+1. Install Homebrew by following the instructions on the [Homebrew website](https://brew.sh).
+2. Open a Terminal window and enter the following command to install FFmpeg: brew install ffmpeg.
+**Linux**
+FFmpeg can be installed on most Linux distributions through the package manager. For example, on Ubuntu and Debian-based systems, open a Terminal window and enter the following command: `sudo apt install ffmpeg`.
 
 # API functions
 The Api struct provides a high-level interface to the YouTube Data API v3, allowing users to authenticate with Google and perform operations such as uploading, downloading and searching for videos. The struct has the following public functions:
