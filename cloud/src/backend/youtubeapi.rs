@@ -1,20 +1,16 @@
-extern crate google_youtube3 as youtube3;
 
 use hyper::client::HttpConnector;
-
 use youtube3::api::{Video, PlaylistItem, Playlist};
 use youtube3::{Error as YoutubeError, YouTube};
+extern crate google_youtube3 as youtube3;
+
 use std::collections::HashMap; 
-use std::io::{self, BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use mime::Mime;
-use std::fs::{self, File};
-use std::thread;
-use time::{OffsetDateTime, UtcOffset, format_description::well_known::Rfc3339};
-use indicatif::{ProgressBar, ProgressStyle};
 use std::process::Command;
 
-use walkdir::WalkDir;
+use mime::Mime;
+
+use time::{OffsetDateTime, UtcOffset};
 
 use crate::backend::encoder::Encode;
 use crate::backend::file::FileInfo;
@@ -96,8 +92,13 @@ impl Api {
     }
 
     /// Returns the authenticated Youtube Data API v3 client.
-    pub fn get_hub(&self) -> YouTube<hyper_rustls::HttpsConnector<HttpConnector>> {
+    pub fn hub(&self) -> YouTube<hyper_rustls::HttpsConnector<HttpConnector>> {
         return self.hub.clone();
+    }
+
+    /// Returns the authenticated Youtube Data API v3 client.
+    pub fn expiration_time(&self) -> OffsetDateTime {
+        return self.expiration_time;
     }
 
     /// Converts a given number of bytes into
@@ -117,25 +118,27 @@ impl Api {
         }
     }
 
-    /// Searches for videos on YouTube based on a query and returns a hashmap of the video titles and descriptions.
+    /// Searches for videos on YouTube based on a query and returns a hashmap of the video titles and ids.
     ///
     /// # Arguments
     ///
+    /// * `channel_id` - The id of the channel you want to search through.
     /// * `hub` - A reference to the YouTube API client.
-    /// * `part` - A vector of strings representing the parts that the API response should.
-    /// * `query` - A string representing the query to search for on YouTube.
-    /// * `max` - An unsigned 32-bit integer representing the maximum number of results to return.
     /// 
     /// # Returns
     /// 
-    /// A hashmap containing the titles and descriptions of the videos found on YouTube that match the search query.
-    pub async fn search(hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>, part: &Vec<String>, query: &str, max: u32) -> HashMap<String, String> {
-        let result = hub.search().list(part)
-            .q(query)
-            .max_results(max)
-             .doit().await;
+    /// A hashmap containing the titles and ids of the videos found on YouTube that match the search query.
+    pub async fn search(channel_id: &str, hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>) -> HashMap<String, String> {
+        
 
         let mut video_map: HashMap<String, String> = HashMap::new();
+        let mut next_page_token: Option<String> = None;
+
+        let result = hub.search().list(&vec!["snippet".to_owned()])
+            .channel_id(channel_id)
+            .max_results(50)
+            .page_token(&next_page_token.clone().unwrap())
+             .doit().await;
 
         match result {
             Err(e) => match e {
@@ -153,16 +156,18 @@ impl Api {
                 |YoutubeError::JsonDecodeError(_, _) => println!("{}", e),
             },
             
-            Ok(res) => { 
+            Ok(res) => {
                 for item in res.1.items.unwrap_or_else(Vec::new) {
                     let video = item.snippet.unwrap();
-
-                    video_map.insert(video.title.unwrap(), video.description.unwrap());
-                    
+                    video_map.insert(video.title.unwrap(), item.id.unwrap().video_id.unwrap());
                 }
-            },
+    
+                next_page_token = res.1.next_page_token;
+                if next_page_token.is_none() {
+                    return video_map;
+                }
+            }
         };
-
         video_map
     }
 
@@ -231,7 +236,7 @@ impl Api {
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     ///     let api = backend::youtubeapi::Api::new("my_api_key").await; 
-    ///     backend::youtubeapi::Api::upload(&Path::new("path/to/my_file.txt"), &mut api.get_hub()).await.expect("failed uploads");
+    ///     backend::youtubeapi::Api::upload(&Path::new("path/to/my_file.txt"), &mut api.hub()).await.expect("failed uploads");
     ///     Ok(())
     /// }
     /// ```
@@ -245,7 +250,7 @@ impl Api {
         let output = Encode::encoder(Encode::new(file.clone(), (1920, 1080), 4, 4));
 
         // create an Mp4 instance from the encoded file
-        let mp4 = Mp4::new(Path::new("output/alpha.txt.mp4"), file.clone().name(), file.clone().datatype(), file.clone().size().try_into().unwrap());
+        let mp4 = Mp4::new(Path::new(&output), file.clone().name(), file.clone().datatype(), file.clone().size().try_into().unwrap());
 
         let result = Self::upload_function(mp4, &hub).await;
             match result {
@@ -274,12 +279,13 @@ impl Api {
     ///
     /// #[tokio::main]
     /// async fn main() {
+    ///     let api = backend::youtubeapi::Api::new("my_api_key").await; 
     ///     let video_id = "dQw4w9WgXcQ";
     ///     let output_folder = "C:/Users/Username/Videos";
-    ///     backend::youtubeapi::Api::download(video_id, output_folder);
+    ///     backend::youtubeapi::Api::download(video_id, output_folder, &api.hub());
     /// }
     /// ```
-    pub async fn download(video_id: &str, output_folder: &str) {
+    pub async fn download(video_id: &str, output_folder: &str, hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>) {
         // Construct the URL of the video
         let url = format!("https://www.youtube.com/watch?v={}", video_id);
     
@@ -299,6 +305,14 @@ impl Api {
 
         if output.status.success() {
             println!("Video downloaded successfully to {}!", output_path.to_str().unwrap());
+
+            // Delete the video
+            let delete_request = hub.videos()
+            .delete(video_id)
+            .doit()
+            .await
+            .unwrap();
+
         } else {
             println!("Error downloading video: {:?}", output.stderr);
         }

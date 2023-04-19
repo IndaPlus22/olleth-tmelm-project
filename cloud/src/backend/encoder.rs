@@ -1,13 +1,15 @@
 use image::{ImageBuffer, Rgb};
+
 use std::fs::File;
 use std::io::{Read, Write, Seek};
 use std::process::Command;
+use std::sync::{Arc, Mutex};
+
+use rayon::prelude::*;
 
 use crate::backend::file::FileInfo;
 
-use std::sync::{Arc, Mutex};
-use indicatif::{ProgressBar, ProgressStyle};
-use rayon::prelude::*;
+
 
 
 
