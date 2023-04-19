@@ -2,16 +2,18 @@ extern crate google_youtube3 as youtube3;
 
 use hyper::client::HttpConnector;
 
+use mp4parse::TimeOffsetVersion;
 use youtube3::api::{Video, PlaylistItem, Playlist};
 use youtube3::{Error as YoutubeError, YouTube};
-use std::collections::HashMap;
-use std::io::BufReader;
+use std::collections::HashMap; 
+use std::io::{self, BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use mime::Mime;
 use std::fs::{self, File};
 use std::thread;
-use std::time::Duration;
+use time::{OffsetDateTime, UtcOffset, format_description::well_known::Rfc3339};
 use indicatif::{ProgressBar, ProgressStyle};
+use std::process::Command;
 
 use walkdir::WalkDir;
 
@@ -20,6 +22,7 @@ use crate::backend::file::FileInfo;
 
 pub struct Api {
     hub: YouTube<hyper_rustls::HttpsConnector<HttpConnector>>,
+    expiration_time: OffsetDateTime,
 }
 
 pub struct Mp4 {
@@ -61,11 +64,13 @@ impl Api {
         .build();
 
         // Define the scopes your application requires access to
-        let scopes = &["https://www.googleapis.com/auth/youtube", "https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.force-ssl", "https://www.googleapis.com/auth/youtube.download"];
+        let scopes = &["https://www.googleapis.com/auth/youtube", "https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.force-ssl"];
 
         let token = auth.token(scopes).await.expect("failed to retrieve token");
-        println!("{:?}", token.expiration_time());
-        println!("{:?}", token.is_expired());
+
+        let expiration_time = token.expiration_time().unwrap().to_offset(UtcOffset::from_hms(2, 0, 0).expect("could not offset to stockholm time"));
+        
+        println!("{:?}", expiration_time);
 
         let hub = YouTube::new(
             hyper::Client::builder().build::<_, hyper::Body>(https),
@@ -75,14 +80,14 @@ impl Api {
         
         
 
-        Api { hub }
+        Api { hub , expiration_time }
     }
 
     pub fn get_hub(&self) -> YouTube<hyper_rustls::HttpsConnector<HttpConnector>> {
         return self.hub.clone();
     }
 
-    pub fn convert_bytes(bytes: u64) -> String {
+    fn convert_bytes(bytes: u64) -> String {
         const KB: f64 = 1024.0;
         const MB: f64 = KB * 1024.0;
         const GB: f64 = MB * 1024.0;
@@ -136,7 +141,7 @@ impl Api {
         video_map
     }
 
-    pub async fn upload(mp4: Mp4, hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn upload_function(mp4: Mp4, hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
 
 
         // create a new video
@@ -171,7 +176,7 @@ impl Api {
         Ok(response.id.expect("missing video ID"))
     }
 
-    pub async fn single_upload(
+    pub async fn upload(
         file_path: &Path, 
         hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -179,16 +184,12 @@ impl Api {
 
         // encode the file
         let file = FileInfo::new(&file_path);
-        let output = Encode::encoder(Encode::new(file.clone(), (1280, 720), 4, 4));
-
-        println!("Sleeping for 10 seconds...");
-        thread::sleep(Duration::from_secs(10));
-        println!("Done sleeping!");
+        //let output = Encode::encoder(Encode::new(file.clone(), (1920, 1080), 4, 4));
 
         // create an Mp4 instance from the encoded file
-        let mp4 = Mp4::new(Path::new(&output), file.clone().name(), file.clone().datatype(), file.clone().size().try_into().unwrap());
+        let mp4 = Mp4::new(Path::new("output/alpha.txt.mp4"), file.clone().name(), file.clone().datatype(), file.clone().size().try_into().unwrap());
 
-        let result = Self::upload(mp4, &hub).await;
+        let result = Self::upload_function(mp4, &hub).await;
             match result {
                 Ok(video_id) => {
                     println!("Video uploaded: https://www.youtube.com/watch?v={}", video_id);
@@ -201,7 +202,108 @@ impl Api {
         Ok(())
     }
 
-    pub async fn multiple_uploads(
+    pub async fn download(video_id: &str, output_folder: &str) {
+        // Construct the URL of the video
+        let url = format!("https://www.youtube.com/watch?v={}", video_id);
+    
+            // Construct the output file path
+        let output_file = format!("{}.mp4", video_id);
+        let output_path = PathBuf::from(output_folder).join(output_file);
+
+        // Use yt-dlp to download the video to the specified output path
+        let output = Command::new("C:/yt-dlp/yt-dlp.exe")
+            .arg(url)
+            .arg("-f")
+            .arg("bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best")
+            .arg("-o")
+            .arg(output_path.to_str().unwrap())
+            .output()
+            .unwrap();
+
+        if output.status.success() {
+            println!("Video downloaded successfully to {}!", output_path.to_str().unwrap());
+        } else {
+            println!("Error downloading video: {:?}", output.stderr);
+        }
+    }
+
+    pub async fn add_to_playlist(
+        video_id: &str,
+        playlist_id: &str,
+        hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>,
+    ) -> Result<PlaylistItem, Box<dyn std::error::Error + Send + Sync>> {
+        let playlist_item = youtube3::api::PlaylistItem {
+            snippet: Some(youtube3::api::PlaylistItemSnippet {
+                playlist_id: Some(playlist_id.to_owned()),
+                resource_id: Some(youtube3::api::ResourceId {
+                    kind: Some("youtube#video".to_owned()),
+                    video_id: Some(video_id.to_owned()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let (_, insert_request) = hub.playlist_items().insert(playlist_item).add_part("snippet")
+        .doit()
+        .await?;
+    
+        Ok(insert_request)
+    }
+
+    pub async fn remove_from_playlist(
+        video_id: &str,
+        playlistitem_id: &str,
+        hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>,
+    ) -> Result<Video, Box<dyn std::error::Error + Send + Sync>> {
+
+        hub.playlist_items().delete(playlistitem_id).doit().await?;
+
+        let video = Video {
+            id: Some(video_id.to_string()),
+            ..Default::default()
+        };
+
+        let update_request = hub.videos().update(video).doit();
+        let (_, videos_update_response) = update_request.await?;
+        Ok(videos_update_response)
+    }
+
+
+    pub async fn create_playlist(
+        hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>,
+        path: PathBuf,
+        privacy: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let playlist = Playlist {
+            snippet: Some(youtube3::api::PlaylistSnippet {
+                title: Some(path.file_name().unwrap_or_default().to_string_lossy().to_string()),
+                description: Some(path.to_str().unwrap().to_owned()),
+                ..Default::default()
+            }),
+            status: Some(youtube3::api::PlaylistStatus {
+                privacy_status: Some(privacy.to_owned()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let request = hub.playlists().insert(playlist);
+        let (_, child_p) = request.doit().await?;
+
+        match child_p.id {
+            Some(id) => {
+                println!("Playlist created successfully with ID: {}", id);
+                return Ok(id);
+
+            }
+            None => Err("Failed to create playlist".into())
+        }
+    }        
+}
+
+/*
+pub async fn multiple_uploads(
         dir_path: &Path, 
         hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -322,121 +424,4 @@ impl Api {
     
         Ok(())
     }
-
-    pub async fn add_to_playlist(
-        video_id: &str,
-        playlist_id: &str,
-        hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>,
-    ) -> Result<PlaylistItem, Box<dyn std::error::Error + Send + Sync>> {
-        let playlist_item = youtube3::api::PlaylistItem {
-            snippet: Some(youtube3::api::PlaylistItemSnippet {
-                playlist_id: Some(playlist_id.to_owned()),
-                resource_id: Some(youtube3::api::ResourceId {
-                    kind: Some("youtube#video".to_owned()),
-                    video_id: Some(video_id.to_owned()),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-        let (_, insert_request) = hub.playlist_items().insert(playlist_item).add_part("snippet")
-        .doit()
-        .await?;
-    
-        Ok(insert_request)
-    }
-
-    pub async fn remove_from_playlist(
-        video_id: &str,
-        playlistitem_id: &str,
-        hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>,
-    ) -> Result<Video, Box<dyn std::error::Error + Send + Sync>> {
-
-        hub.playlist_items().delete(playlistitem_id).doit().await?;
-
-        let video = Video {
-            id: Some(video_id.to_string()),
-            ..Default::default()
-        };
-
-        let update_request = hub.videos().update(video).doit();
-        let (_, videos_update_response) = update_request.await?;
-        Ok(videos_update_response)
-    }
-
-
-    pub async fn create_playlist(
-        hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>,
-        path: PathBuf,
-        parent: String,
-        privacy: &str,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        let playlist = Playlist {
-            snippet: Some(youtube3::api::PlaylistSnippet {
-                title: Some(path.file_name().unwrap_or_default().to_string_lossy().to_string()),
-                description: Some(path.to_str().unwrap().to_owned()),
-                ..Default::default()
-            }),
-            status: Some(youtube3::api::PlaylistStatus {
-                privacy_status: Some(privacy.to_owned()),
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-
-        let request = hub.playlists().insert(playlist);
-        let (_, child_p) = request.doit().await?;
-
-        match child_p.id {
-            Some(id) => {
-                println!("Playlist created successfully with ID: {}", id);
-        
-                let response = hub
-                    .playlists()
-                    .list(&vec!["id".to_string()])
-                    .mine(true)
-                    .add_part("snippet")
-                    .max_results(50u32)
-                    .doit()
-                    .await?;
-        
-                let parent_items = response.1.items.unwrap_or_default();
-                for parent_p in parent_items {
-                    if parent_p.snippet.is_some() && parent_p.snippet.as_ref().unwrap().title == Some(parent.to_owned()) {
-                        Api::add_playlist(hub,&parent_p.id.unwrap(), &id).await?;
-                        println!("added playlists");
-                    }
-                }
-
-                return Ok(id);
-
-            }
-            None => Err("Failed to create playlist".into())
-        }
-    }     
-    
-    pub async fn add_playlist(
-        hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>,
-        parent_playlist_id: &str,
-        child_playlist_id: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let request = hub.playlist_items().insert(PlaylistItem {
-            snippet: Some(youtube3::api::PlaylistItemSnippet {
-                playlist_id: Some(parent_playlist_id.to_owned()),
-                resource_id: Some(youtube3::api::ResourceId {
-                    kind: Some("youtube#playlist".to_owned()),
-                    video_id: None,
-                    playlist_id: Some(child_playlist_id.to_owned()),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            }),
-            ..Default::default()
-        });
-    
-        request.doit().await?;
-    
-        Ok(())
-    }
-}
+ */
