@@ -1,4 +1,53 @@
 
+# Minimum Viable Product (MVP) for Cloud Storage Program
+
+The MVP for the cloud storage program should include the following features:
+
+## Upload 
+- Ability for a user to upload a file to YouTube.
+- Conversion of the uploaded file to MP4 format using ffmpeg.
+- Storage of the converted file on YouTube.
+## Download
+- Ability for a user to download a previously uploaded file from YouTube.
+- Conversion of the downloaded file from MP4 format to its original format using ffmpeg.
+## Authentication
+- User authentication to ensure only authorized users can access their files.
+- Use of Google OAuth 2.0 to authenticate users with YouTube.
+## User Interface
+- A simple Graphical User Interface (GUI) for interacting with the program.
+
+# Installing and Running the MVP
+To install and run the MVP, follow these steps:
+
+## Requirements
+See External programs on how to install:
+- Rust programming language
+- ffmpeg
+- yt-dlp
+
+## Steps
+1. Clone the GitHub repository for the MVP.
+2. Install Rust by following the instructions on the Rust website.
+3. Install ffmpeg by following the instructions on the ffmpeg website.
+4. Install yt-dlp by following the instructions on the yt-dlp website.
+5. Create a Google Cloud Platform project and enable the YouTube Data API.
+6. Create a client ID and client secret for the YouTube Data API.
+7. Save the client ID and client secret in a file named client_secret.json in the root directory of the MVP repository.
+8. Build the MVP by running cargo build in the root directory of the MVP repository.
+9. Run the MVP by running cargo run in the root directory of the MVP repository.
+
+# Next Steps
+Once the MVP is complete, there are several potential features that could be added to the program, such as:
+
+- Improved user interface (e.g., web or desktop application)
+- File sharing and collaboration features
+- Automatic backups and syncing of local files with cloud storage
+- Encryption and security features
+- Batch file processing
+- User accounts
+- File versioning
+- Folder organization
+
 # External Programs
 ## yt-dlp
 yt-dlp is a command-line program to download videos from YouTube and many other video platforms. It is used in the cloud storage program to download videos from YouTube and convert them to other formats for storage.
@@ -13,7 +62,7 @@ In the cloud storage program, yt-dlp is used to download videos from YouTube and
 
 **macOS**
 1. Install Homebrew by following the instructions on the [Homebrew website](https://brew.sh).
-2. Open a Terminal window and enter the following command to install yt-dlp: brew install yt-dlp.
+2. Open a Terminal window and enter the following command to install yt-dlp: `brew install yt-dlp`.
 
 **Linux**
 
@@ -32,7 +81,7 @@ In the cloud storage program, FFmpeg is used to convert the audio and video stre
 
 **macOS**
 1. Install Homebrew by following the instructions on the [Homebrew website](https://brew.sh).
-2. Open a Terminal window and enter the following command to install FFmpeg: brew install ffmpeg.
+2. Open a Terminal window and enter the following command to install FFmpeg: `brew install ffmpeg`.
 
 **Linux**
 
