@@ -1,102 +1,62 @@
-
-use std::env::args;
-use image::{ImageBuffer, Rgba, Pixel};
-use std::env;
-use std::error::Error;
-use std::fs::File;
-use std::io::{Read, Write};
-use std::process::{Command, Stdio};
-use gtk::{Application};
-use gio::prelude::*;
+use gtk4 as gtk;
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
+use gtk::{glib, Align, Application, ApplicationWindow, Button, FileChooserAction, FileChooserDialog, FileChooserNative,
+    CompositeTemplate, };
+use std::path::Path;
+use std::ffi::OsStr;
 
-mod gui;
+fn main() -> glib::ExitCode {
+    let app = Application::builder()
+        .application_id("org.example.HelloWorld")
+        .build();
+    
+    app.connect_activate(|app| {
+        // Create the main window.
+        let window = ApplicationWindow::builder()
+            .application(app)
+            .default_width(320)
+            .default_height(200)
+            .title("Youtube File Storage")
+            .build();
+        
+        let upload_button = Button::builder()
+            .label("Upload File")
+            .margin_top(10)
+            .margin_bottom(10)
+            .margin_start(10)
+            .margin_end(10)
+            .halign(Align::Center)
+            .valign(Align::Start)
+            .build();
 
-fn main() {
 
-    // GUI 
-    let application = Application::new(Some("com.example.video_uploader"), Default::default())
-    .expect("Failed to initialize GTK application");
+        window.set_child(Some(&upload_button));
+        // Connect the button to a callback that shows the file chooser dialog
+        upload_button.connect_clicked(|_| {
+            let dialog = gtk::FileChooserNative::new(
+                Some("Open File"),
+                Some(&Window::new(gtk::WindowType::Popup)),
+                gtk::FileChooserAction::Open,
+            );
 
-    application.connect_activate(|app| {
-        gui::build_ui(app);
+            // Show the file chooser dialog and get the response
+            let response = dialog.run();
+    
+            // Check if the user clicked the Open button
+            if response == gtk::ResponseType::Accept {
+                if let Some(uri) = dialog.uri() {
+                    println!("Selected file: {}", uri);
+                }
+            };
+            // Close the file chooser dialog
+            dialog.hide();
+        });
+
+        window.show();
     });
 
-    application.run(&args().collect::<Vec<_>>());
-
-    // ENCODER
-
-    // Read the input file into a Vec<u8>
-    let mut input_file = File::open("testfiles/enwik9").unwrap();
-    let mut input_data = Vec::new();
-    input_file.read_to_end(&mut input_data).unwrap();
-
-    // Calculate the number of frames we need to create
-    let frame_size = 1920 * 1080 * 4;
-    let num_frames = (input_data.len() + frame_size - 1) / frame_size;
-
-    // Create a new RGBA image buffer for each frame
-    let mut frames = Vec::new();
-    for _ in 0..num_frames {
-        frames.push(ImageBuffer::<Rgba<u8>, Vec<u8>>::new(1920, 1080));
-    }
-
-    // Split the input data into chunks of 1920 x 1080 x 4 bytes and
-    // fill each frame with the corresponding chunk of data
-    for (i, chunk) in input_data.chunks(frame_size).enumerate() {
-        let frame = &mut frames[i];
-        for (j, pixel) in chunk.chunks_exact(4).enumerate() {
-            let x = j % 1920;
-            let y = j / 1920;
-            let pixel = Rgba::from_slice(pixel);
-            frame.put_pixel(x as u32, y as u32, *pixel);
-        }
-    }
-
-    // Save each frame as a PNG image file
-    for (i, frame) in frames.iter().enumerate() {
-        let filename = format!("frames/frame{}.png", i);
-        frame.save(&filename).unwrap();
-    }
-
-    // Convert the PNG frames to an MP4 video using FFmpeg
-    let output_filename = "output/output.mp4";
-    let mut ffmpeg = Command::new("C:/ffmpeg/bin/ffmpeg.exe")
-        .args(&[
-            "-y", // overwrite output file if it exists
-            "-f",
-            "image2pipe",
-            "-vcodec",
-            "png",
-            "-r",
-            "60",
-            "-i",
-            "-", // read from stdin
-            "-vcodec",
-            "libx264",
-            "-pix_fmt",
-            "yuv420p",
-            "-preset",
-            "veryslow",
-            "-crf",
-            "17",
-            "-r",
-            "60",
-            output_filename,
-        ])
-        .stdin(Stdio::piped())
-        .arg("-loglevel")
-        .arg("error")
-        .spawn()
-        .unwrap();
-    let mut stdin = ffmpeg.stdin.take().unwrap();
-    for (i, frame) in frames.iter().enumerate() {
-        let filename = format!("frames/frame{}.png", i);
-        let mut file = File::open(&filename).unwrap();
-        let mut data = Vec::new();
-        file.read_to_end(&mut data).unwrap();
-        stdin.write_all(&data).unwrap();
-    }
-    drop(stdin);
-    ffmpeg.wait().unwrap();
+    app.run()
 }
+
+
