@@ -306,6 +306,7 @@ impl Api {
         if output.status.success() {
             println!("Video downloaded successfully to {}!", output_path.to_str().unwrap());
             //Todo! Delete video from youtube after its been downloaded
+            
         } else {
             println!("Error downloading video: {:?}", output.stderr);
         }
