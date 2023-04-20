@@ -294,7 +294,7 @@ impl Api {
         let output_path = PathBuf::from(output_folder).join(output_file);
 
         // Use yt-dlp to download the video to the specified output path
-        let output = Command::new("C:/yt-dlp/yt-dlp.exe")
+        let output = Command::new("yt-dlp")
             .arg(url)
             .arg("-f")
             .arg("bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best")
