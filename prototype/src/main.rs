@@ -1,62 +1,52 @@
-use gtk4 as gtk;
-use gtk::prelude::*;
-use gtk::subclass::prelude::*;
-use gtk::{glib, Align, Application, ApplicationWindow, Button, FileChooserAction, FileChooserDialog, FileChooserNative,
-    CompositeTemplate, };
-use std::path::Path;
-use std::ffi::OsStr;
+use gtk4::prelude::*;
+use gtk4::{Application, ApplicationWindow, Button, FileChooserNative, ResponseType};
 
-fn main() -> glib::ExitCode {
-    let app = Application::builder()
-        .application_id("org.example.HelloWorld")
-        .build();
-    
-    app.connect_activate(|app| {
-        // Create the main window.
-        let window = ApplicationWindow::builder()
-            .application(app)
-            .default_width(320)
-            .default_height(200)
-            .title("Youtube File Storage")
-            .build();
-        
-        let upload_button = Button::builder()
-            .label("Upload File")
-            .margin_top(10)
-            .margin_bottom(10)
-            .margin_start(10)
-            .margin_end(10)
-            .halign(Align::Center)
-            .valign(Align::Start)
-            .build();
-
-
-        window.set_child(Some(&upload_button));
-        // Connect the button to a callback that shows the file chooser dialog
-        upload_button.connect_clicked(|_| {
-            let dialog = gtk::FileChooserNative::new(
-                Some("Open File"),
-                Some(&Window::new(gtk::WindowType::Popup)),
-                gtk::FileChooserAction::Open,
-            );
-
-            // Show the file chooser dialog and get the response
-            let response = dialog.run();
-    
-            // Check if the user clicked the Open button
-            if response == gtk::ResponseType::Accept {
-                if let Some(uri) = dialog.uri() {
-                    println!("Selected file: {}", uri);
-                }
-            };
-            // Close the file chooser dialog
-            dialog.hide();
-        });
-
-        window.show();
-    });
-
-    app.run()
+fn main() {
+    // Create a new application
+    let app = Application::new(Some("com.example.youtubefilestorage"), Default::default());
+    app.connect_activate(build_ui);
+    app.run();
 }
 
+fn build_ui(app: &Application) {
+    // Create the main window
+    let window = ApplicationWindow::new(app);
+    window.set_title(Some("Youtube File Storage"));
+    window.set_default_size(350, 70);
 
+    // Button for opening the file chooser
+    let button = Button::with_label("Choose File");
+    button.set_halign(gtk4::Align::Center);
+    button.set_valign(gtk4::Align::Center);
+    window.set_child(Some(&button));
+
+    // Button onclick action
+    let window_weak = window.downgrade();
+    button.connect_clicked(move |_btn| {
+        let window = match window_weak.upgrade() {
+            Some(window) => window,
+            None => return,
+        };
+
+        let file_chooser = FileChooserNative::new(
+            Some("Choose a file"),
+            Some(&window),
+            gtk4::FileChooserAction::Open,
+            Some("Open"),
+            Some("Cancel"),
+        );
+
+        file_chooser.connect_response(move |dialog, response| {
+            if response == ResponseType::Accept {
+                let file_path = dialog.file().unwrap().path().unwrap();
+                println!("File path: {:?}", file_path); //debug
+                // Invoke YT API here
+            }
+            dialog.destroy();
+        });
+
+        file_chooser.show();
+    });
+
+    window.present();
+}
