@@ -231,22 +231,23 @@ impl Api {
     ///
     /// ```
     /// use youtube_upload::YouTube;
-    /// use std::path::Path;
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     ///     let api = backend::youtubeapi::Api::new("my_api_key").await; 
-    ///     backend::youtubeapi::Api::upload(&Path::new("path/to/my_file.txt"), &mut api.hub()).await.expect("failed uploads");
+    ///     backend::youtubeapi::Api::upload("path/to/my_file.txt", &mut api.hub()).await.expect("failed uploads");
     ///     Ok(())
     /// }
     /// ```
     pub async fn upload(
-        file_path: &Path, 
+        file_path: &str, 
         hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+
+        let path = Path::new(&file_path);
         
         // encode the file
-        let file = FileInfo::new(&file_path);
+        let file = FileInfo::new(&path);
         let output = Encode::encoder(Encode::new(file.clone(), (1920, 1080), 4, 4));
 
         // create an Mp4 instance from the encoded file
@@ -271,11 +272,12 @@ impl Api {
     ///
     /// * `video_id` - A string slice containing the ID of the YouTube video to download.
     /// * `output_folder` - A string slice containing the path of the folder to save the downloaded video to.
+    /// * `hub` - A reference to a `YouTube` object.
     ///
     /// # Example
     ///
     /// ```
-    /// use my_youtube_lib::YouTube;
+    /// use youtubeapi::Api;
     ///
     /// #[tokio::main]
     /// async fn main() {

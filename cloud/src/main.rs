@@ -14,7 +14,7 @@ async fn main() {
 
     backend::youtubeapi::Api::search("A79UdIx9aL8", &api.hub()).await;
 
-    backend::youtubeapi::Api::upload(&Path::new("input/alpha.txt"), &api.hub()).await.expect("failed uploads");
+    backend::youtubeapi::Api::upload("input/alpha.txt", &api.hub()).await.expect("failed uploads");
 
     backend::youtubeapi::Api::download("A79UdIx9aL8", "output", &api.hub()).await;
 }
