@@ -9,15 +9,13 @@ edition = "2021"
 hyper = { version = "*", features = ["full"] }
 hyper-rustls = "0.24.0"
 google-youtube3 = "*"
-
 tokio = { version = "1.27.0", features = ["rt-multi-thread"] }
 yup-oauth2 = "*"
 tokio-util = { version = "*", features = ["codec", "io"] }
 mime = "*"
-futures = "*"
-open = "*"
-mp4parse = "*"
-chrono = "*"
 image = "*"
-indicatif = "*"
 rayon = "*"
+im = "*"
+time = "*"
+chrono = "*"
+memmap = "*"

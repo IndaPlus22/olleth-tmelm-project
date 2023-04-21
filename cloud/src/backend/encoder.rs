@@ -1,17 +1,19 @@
 use image::{ImageBuffer, Rgb};
+
 use std::fs::File;
 use std::io::{Read, Write, Seek};
 use std::process::Command;
+use std::sync::{Arc, Mutex};
+
+use rayon::prelude::*;
 
 use crate::backend::file::FileInfo;
 
-use std::sync::{Arc, Mutex};
-use indicatif::{ProgressBar, ProgressStyle};
-use rayon::prelude::*;
 
 
 
 
+///A struct holding the essential parts to the encoder such as file, res and pixel size.
 pub struct Encode {
     file: FileInfo,
     res: (usize, usize),
@@ -21,6 +23,14 @@ pub struct Encode {
 
 impl Encode {
 
+    /// Constructs a new `Encode`.
+    ///
+    /// # Arguments
+    ///
+    /// * `file` - Contains the file data.
+    /// * `res` - The video resolution.
+    /// * `sqaure_w` - The pixels width.
+    /// * `square_h` - The pixels height.
     pub fn new(file: FileInfo, res: (usize, usize), square_w: usize, square_h: usize) -> Encode {
         Encode {
             file,
@@ -30,18 +40,21 @@ impl Encode {
         }
     }
 
-    pub fn encoder(encode: Encode) {
+    /// Encodes the specified file into a mp4.
+    ///
+    /// # Arguments
+    ///
+    /// * `Encode` - The Encode struct containing the neccesary parts for the encoding.
+    /// 
+    /// # Returns
+    /// 
+    /// A String representing the mp4 output path.
+    pub fn encoder(encode: Encode) -> String {
    
         //Get file size
         let file_size = FileInfo::size(&encode.file);
     
-        // Create a progress bar
-        let pb = Arc::new(Mutex::new(ProgressBar::new(file_size as u64)));
-        pb.lock()
-            .unwrap()
-            .set_style(ProgressStyle::default_bar().template("{elapsed_precise} [{bar:40.cyan/blue}] {percent}% {bytes}/{total_bytes}  ({eta})").unwrap());
-    
-         //Calculate number of frames needed to contain every bit from the specified file
+        //Calculate number of frames needed to contain every bit from the specified file
         let frame_size: usize = (encode.res.0 * encode.res.1) / (encode.square_w * encode.square_h);
         let num_bits = file_size * 8;
         let num_frames = (num_bits + frame_size  - 1) / frame_size;
@@ -50,7 +63,7 @@ impl Encode {
         let title = &format!("title={}", FileInfo::name(&encode.file));
         let datatype = &format!("author={}", FileInfo::datatype(&encode.file));
         let date = &format!("time={}", FileInfo::date(&encode.file));
-        let output = &format!("output/{}.mp4", title);
+        let output = &format!("output/{}.mp4", FileInfo::name(&encode.file));
     
         // Convert the frames to an MP4 video using FFmpeg
         let ffmpeg = Command::new("ffmpeg")
@@ -59,7 +72,7 @@ impl Encode {
                 "-framerate", "30",
                 "-f", "rawvideo",
                 "-pix_fmt", "rgb24",
-                "-s", &format!("{}x{}", encode.res.0,  encode.res.0),
+                "-s", &format!("{}x{}", encode.res.0,  encode.res.1),
                 "-i", "-",
                 "-c:v", "libx264",
                 "-crf", "18",
@@ -116,14 +129,13 @@ impl Encode {
                     let mut process = ffmpeg_process.lock().unwrap();
                     process.stdin.as_mut().unwrap().write_all(&frame.into_raw()).unwrap();
                 }
-                pb.lock().unwrap().inc(chunk.len() as u64);
     
                 // Release used memory
                 drop(chunk);
                 drop(input_file);
     
             });
-    
+        output.to_string()
     }
 }
 
