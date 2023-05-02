@@ -1,5 +1,8 @@
 use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow, Button, FileChooserNative, ResponseType};
+use youtube_api::Api;
+let api = Api::new("/path/to/client_secret.json").unwrap();
+let youtube = api.get_hub();
 
 fn main() {
     // Create a new application
@@ -40,7 +43,7 @@ fn build_ui(app: &Application) {
             if response == ResponseType::Accept {
                 let file_path = dialog.file().unwrap().path().unwrap();
                 println!("File path: {:?}", file_path); //debug
-                // Invoke YT API here
+                Api::upload(file_path, &youtube).unwrap();
             }
             dialog.destroy();
         });
