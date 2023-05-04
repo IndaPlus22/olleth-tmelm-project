@@ -1,5 +1,6 @@
 
 use hyper::client::HttpConnector;
+use rayon::result;
 use youtube3::api::{Video, PlaylistItem, Playlist};
 use youtube3::{Error as YoutubeError, YouTube};
 extern crate google_youtube3 as youtube3;
@@ -15,14 +16,278 @@ use time::{OffsetDateTime, UtcOffset};
 use crate::backend::encoder::Encode;
 use crate::backend::file::FileInfo;
 
-/// A struct representing an authenticated Youtube Data API v3 client.
-pub struct Api {
-    hub: YouTube<hyper_rustls::HttpsConnector<HttpConnector>>,
-    expiration_time: OffsetDateTime,
+
+pub struct User {
+    id: String,
+    name: String,
+    api: Api,
+    directory: HashMap<String, DirectoryEntry>,
+}
+
+pub enum DirectoryEntry {
+    Video(String),
+    Playlist {
+        id: String,
+        videos: HashMap<String, String>,
+    },
+}
+
+impl User {
+    //Methods that handle the User Struct
+
+    pub async fn new(path: &str) -> Self {
+        let api = Api::new(path).await;
+        let id = Api::channel_id(&api.hub()).await.expect("channel id error");
+        let name = Api::channel_name(&api.hub()).await.expect("channel name error");
+        let directory = User::build_directory(&api).await;
+
+        User {
+            id,
+            name,
+            api,
+            directory,
+        }
+    }
+
+    pub async fn refresh_api(&mut self, path: &str) {
+        self.api = Api::new(path).await;
+    }
+
+    pub async fn update_directory(&mut self) {
+        self.directory = User::build_directory(&self.api).await;
+    }
+
+}
+
+impl User {
+    //Methods that deal with video and playlist searching
+
+    pub async fn search_directory(&self, query: &str) -> HashMap<String, String> {
+
+        let hub = &self.api.hub();
+
+        let mut directory: HashMap<String, String> = HashMap::new();
+        let mut next_page_token: Option<String> = None;
+
+        let result = hub.search().list(&vec!["snippet".to_owned()])
+            .for_mine(true)
+            .q(query)
+            .max_results(50)
+            .page_token(&next_page_token.clone().unwrap())
+             .doit().await;
+
+        match result {
+            Err(e) => match e {
+                // The Error enum provides details about what exactly happened.
+                // You can also just use its `Debug`, `Display` or `Error` traits
+                YoutubeError::HttpError(_)
+                |YoutubeError::Io(_)
+                |YoutubeError::MissingAPIKey
+                |YoutubeError::MissingToken(_)
+                |YoutubeError::Cancelled
+                |YoutubeError::UploadSizeLimitExceeded(_, _)
+                |YoutubeError::Failure(_)
+                |YoutubeError::BadRequest(_)
+                |YoutubeError::FieldClash(_)
+                |YoutubeError::JsonDecodeError(_, _) => println!("{}", e),
+            },
+            
+            Ok(res) => {
+                for item in res.1.items.unwrap_or_else(Vec::new) {
+                    let video = item.snippet.unwrap();
+                    directory.insert(video.title.unwrap(), item.id.unwrap().video_id.unwrap());
+                }
+    
+                next_page_token = res.1.next_page_token;
+                if next_page_token.is_none() {
+                    return directory;
+                }
+            }
+        };
+        directory
+    }
+
+    pub async fn search_playlist(&self, playlist_id: &str) -> HashMap<String, String> {
+        let mut directory = HashMap::new();
+        let mut next_page_token: Option<String> = None;
+
+        // Build the playlist items request.
+        let result = self
+            .api
+            .hub()
+            .playlist_items()
+            .list(&vec!["id".to_string(), "snippet".to_string()])
+            .playlist_id(playlist_id)
+            .max_results(50)
+            .page_token(&next_page_token.clone().unwrap_or_else(|| "".to_owned()))
+            .doit().await;
+
+        match result {
+            Err(e) => match e {
+                // The Error enum provides details about what exactly happened.
+                // You can also just use its `Debug`, `Display` or `Error` traits
+                YoutubeError::HttpError(_)
+                |YoutubeError::Io(_)
+                |YoutubeError::MissingAPIKey
+                |YoutubeError::MissingToken(_)
+                |YoutubeError::Cancelled
+                |YoutubeError::UploadSizeLimitExceeded(_, _)
+                |YoutubeError::Failure(_)
+                |YoutubeError::BadRequest(_)
+                |YoutubeError::FieldClash(_)
+                |YoutubeError::JsonDecodeError(_, _) => println!("{}", e),
+            },
+            
+            Ok(res) => {
+                for item in res.1.items.unwrap_or_else(Vec::new) {
+                    let video = item.snippet.unwrap();
+                    let video_id = video.resource_id.unwrap().video_id.unwrap();
+                    directory.insert(video.title.unwrap(), video_id);
+                }
+    
+                next_page_token = res.1.next_page_token;
+                if next_page_token.is_none() {
+                    return directory;
+                }
+            }
+        };
+        directory
+    }
+}
+
+
+impl User {
+    // Methods that deal with playlist creation and handling
+
+    pub async fn create_playlist(self, name: &str) {
+        let playlist_id = Api::create_playlist(&self.api.hub(), name).await.expect("failed to create playlist!");
+
+    }
+
+    pub async fn remove_playlist() {
+        todo!()
+    }
+
+    pub async fn add_playlistitem(self, video_id: &str, playlist_id: &str) {
+        let playlistitem_id = Api::add_to_playlist(video_id, playlist_id, &self.api.hub()).await.expect("failed to add video to playlist!");
+    }
+
+    pub async fn remove_playlistitem(self, video_id: &str, playlistitem_id: &str) {
+        Api::remove_from_playlist(video_id, playlistitem_id, &self.api.hub()).await.expect("failed to remove video from playlist!");
+    }
+}
+
+impl User {
+    // Methods that handles the upload and download operations 
+
+    pub async fn upload(self, file_path: &str) {
+        let result = Api::upload(file_path, &self.api.hub()).await;
+
+        match result {
+            Ok(_res) => println!("Complete upload!"),
+            Err(e) => println!("{}", e),
+        }
+    }
+
+    pub async fn download(self, video_id: &str, output_folder: &str)  {
+        let result = Api::download(video_id, output_folder, &self.api.hub()).await;
+
+        match result {
+            Ok(_res) => println!("Complete download!"),
+            Err(e) => println!("{}", e),
+        }
+    }
+}
+
+impl User {
+    // Methods that deal with directory building
+
+    async fn build_directory(api: &Api) -> HashMap<String, DirectoryEntry> {
+        let mut directory: HashMap<String, DirectoryEntry> = HashMap::new();
+        let mut next_page_token: Option<String> = None;
+
+        loop {
+            let result = api.hub().search().list(&vec!["snippet".to_owned()])
+                .for_mine(true)
+                .max_results(50)
+                .page_token(&next_page_token.clone().unwrap_or_else(|| "".to_owned()))
+                .doit().await;
+
+            match result {
+                Err(e) => match e {
+                    // The Error enum provides details about what exactly happened.
+                    // You can also just use its `Debug`, `Display` or `Error` traits
+                    YoutubeError::HttpError(_)
+                    | YoutubeError::Io(_)
+                    | YoutubeError::MissingAPIKey
+                    | YoutubeError::MissingToken(_)
+                    | YoutubeError::Cancelled
+                    | YoutubeError::UploadSizeLimitExceeded(_, _)
+                    | YoutubeError::Failure(_)
+                    | YoutubeError::BadRequest(_)
+                    | YoutubeError::FieldClash(_)
+                    | YoutubeError::JsonDecodeError(_, _) => println!("{}", e),
+                },
+
+                Ok(res) => {
+                    for item in res.1.items.unwrap_or_else(Vec::new) {
+                        if let Some(video_id) = &item.id.as_ref().unwrap().video_id {
+                            directory.insert(item.snippet.unwrap().title.unwrap(), DirectoryEntry::Video(video_id.to_string()));
+                        } else if let Some(playlist_id) = &item.id.as_ref().unwrap().playlist_id {
+                            let videos = User::get_playlist_videos(api, &playlist_id).await;
+                            directory.insert(item.snippet.unwrap().title.unwrap(), DirectoryEntry::Playlist { id: playlist_id.to_string(), videos });
+                        }
+                    }
+
+                    next_page_token = res.1.next_page_token;
+                    if next_page_token.is_none() {
+                        break;
+                    }
+                }
+            }
+        }
+
+        directory
+    }
+
+    async fn get_playlist_videos(api: &Api, playlist_id: &str) -> HashMap<String, String> {
+        let hub = api.hub();
+        let mut videos: HashMap<String, String> = HashMap::new();
+        let mut next_page_token: Option<String> = None;
+        loop {
+            let result = hub.playlist_items().list(&vec!["snippet".to_owned()])
+                .playlist_id(playlist_id)
+                .max_results(50)
+                .page_token(&next_page_token.clone().unwrap_or_else(|| "".to_owned()))
+                .doit().await;
+    
+            match result {
+                Err(e) => match e {
+                    _ => println!("{}", e),
+                },
+                Ok(res) => {
+                    for item in res.1.items.unwrap_or_else(Vec::new) {
+                        if let Some(video_id) = item.snippet.as_ref().and_then(|s| s.resource_id.as_ref())
+                            .and_then(|r| r.video_id.as_ref()) {
+                            let title = item.snippet.as_ref().and_then(|s| s.title.as_ref())
+                                .map(|s| s.to_owned()).unwrap_or_else(|| "".to_owned());
+                            videos.insert(title, video_id.to_owned());
+                        }
+                    }
+                    next_page_token = res.1.next_page_token.clone();
+                    if next_page_token.is_none() {
+                        break;
+                    }
+                }
+            }
+        }
+    
+        videos
+    }
 }
 
 /// A struct representing an MP4 video file.
-pub struct Mp4 {
+struct Mp4 {
     path: PathBuf,
     title: String,
     datatype: String,
@@ -38,7 +303,7 @@ impl Mp4 {
     /// * `title` - The title of the MP4 video.
     /// * `datatype` - The data type of the MP4 video.
     /// * `size` - The size of the MP4 video in bytes.
-    pub fn new(path: &Path, title: &str, datatype: &str, size: u32) -> Self {
+    fn new(path: &Path, title: &str, datatype: &str, size: u32) -> Self {
         Mp4 {
             path: path.to_path_buf(),
             title: title.to_owned(),
@@ -48,13 +313,20 @@ impl Mp4 {
     }
 }
 
+/// A struct containing Youtube API3 client data.
+struct Api {
+    hub: YouTube<hyper_rustls::HttpsConnector<HttpConnector>>,
+    token: yup_oauth2::AccessToken,
+    expiration_time: OffsetDateTime,
+}
+
 impl Api {
     /// Constructs a new `Api` with an authenticated Youtube Data API v3 client.
     ///
     /// # Arguments
     ///
     /// * `path` - The path to the client secret file.
-    pub async fn new(path: &str) -> Self {
+    async fn new(path: &str) -> Self {
         let secret =  yup_oauth2::read_application_secret(path)
         .await
         .expect("client_secret.json");
@@ -88,15 +360,15 @@ impl Api {
         
         
 
-        Api { hub , expiration_time }
+        Api { hub, token: token.clone(), expiration_time }
     }
 
-    /// Returns the authenticated Youtube Data API v3 client.
-    pub fn hub(&self) -> YouTube<hyper_rustls::HttpsConnector<HttpConnector>> {
+    /// Returns the authenticated Youtube Data API v3 hub.
+    fn hub(&self) -> YouTube<hyper_rustls::HttpsConnector<HttpConnector>> {
         return self.hub.clone();
     }
 
-    /// Returns the authenticated Youtube Data API v3 client.
+    /// Returns the expiration time for the auth token.
     pub fn expiration_time(&self) -> OffsetDateTime {
         return self.expiration_time;
     }
@@ -128,16 +400,16 @@ impl Api {
     /// # Returns
     /// 
     /// A hashmap containing the titles and ids of the videos found on YouTube that match the search query.
-    pub async fn search(channel_id: &str, hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>) -> HashMap<String, String> {
+    async fn search(hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>) -> HashMap<String, String> {
         
 
         let mut video_map: HashMap<String, String> = HashMap::new();
         let mut next_page_token: Option<String> = None;
 
         let result = hub.search().list(&vec!["snippet".to_owned()])
-            .channel_id(channel_id)
+            .for_mine(true)
             .max_results(50)
-            .page_token(&next_page_token.clone().unwrap())
+            .page_token(&next_page_token.clone().unwrap_or_else(|| "".to_owned()))
              .doit().await;
 
         match result {
@@ -239,7 +511,7 @@ impl Api {
     ///     Ok(())
     /// }
     /// ```
-    pub async fn upload(
+    async fn upload(
         file_path: &str, 
         hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -255,15 +527,13 @@ impl Api {
 
         let result = Self::upload_function(mp4, &hub).await;
             match result {
-                Ok(video_id) => {
-                    println!("Video uploaded: https://www.youtube.com/watch?v={}", video_id);
+                Ok(_res) => {
+                    return Ok(());
                 }
                 Err(error) => {
-                    eprintln!("Error uploading video: {:?}", error.to_string());
+                    return Err(error);
                 }
             }
-
-        Ok(())
     }
 
     /// Downloads a YouTube video specified by its ID to the given output folder.
@@ -287,12 +557,28 @@ impl Api {
     ///     backend::youtubeapi::Api::download(video_id, output_folder, &api.hub());
     /// }
     /// ```
-    pub async fn download(video_id: &str, output_folder: &str, hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>) {
+    pub async fn download(video_id: &str, output_folder: &str, hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         // Construct the URL of the video
         let url = format!("https://www.youtube.com/watch?v={}", video_id);
-    
+        let mut title = video_id.to_string();
+        let mut datatype = ".bin".to_string();
+
+        let result = hub.videos()
+        .list(&vec!["snippet".to_string()])
+        .add_id(video_id)
+        .doit()
+        .await
+        .unwrap();
+
+        if let Some(video) = result.1.items {
+            if let Some(snippet) = video[0].snippet.clone() {
+                title = snippet.title.unwrap_or_else(|| "".to_string());
+                datatype = snippet.tags.and_then(|mut tags| tags.pop()).expect("tag retrieval failed!");
+            }
+        }
+
         // Construct the output file path
-        let output_file = format!("{}.mp4", video_id);
+        let output_file = format!("{}.{}.mp4", title, datatype);
         let output_path = PathBuf::from(output_folder).join(output_file);
 
         // Use yt-dlp to download the video to the specified output path
@@ -305,12 +591,9 @@ impl Api {
             .output()
             .unwrap();
 
-        if output.status.success() {
-            println!("Video downloaded successfully to {}!", output_path.to_str().unwrap());
-            //Todo! Delete video from youtube after its been downloaded
-            
-        } else {
-            println!("Error downloading video: {:?}", output.stderr);
+        match output.status.success() {
+           true =>  return Ok(output_path.to_str().unwrap().to_string()),
+           false => return Err("failed to download!".to_string().into()),
         }
     }
     
@@ -401,17 +684,15 @@ impl Api {
     ///
     pub async fn create_playlist(
         hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>,
-        path: PathBuf,
-        privacy: &str,
+        name: &str,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let playlist = Playlist {
             snippet: Some(youtube3::api::PlaylistSnippet {
-                title: Some(path.file_name().unwrap_or_default().to_string_lossy().to_string()),
-                description: Some(path.to_str().unwrap().to_owned()),
+                title: Some(name.to_owned()),
                 ..Default::default()
             }),
             status: Some(youtube3::api::PlaylistStatus {
-                privacy_status: Some(privacy.to_owned()),
+                privacy_status: Some("private".to_owned()),
                 ..Default::default()
             }),
             ..Default::default()
@@ -428,129 +709,35 @@ impl Api {
             }
             None => Err("Failed to create playlist".into())
         }
+    }
+
+    async fn channel_id(hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let id_request = hub.channels().list(&vec!["id".to_string()]).mine(true).doit().await.expect("error when retrieving channel id!");
+
+        // Extract the channel ID from the response.
+        
+        match id_request.1.items.unwrap().first() {
+            Some(channel) => {
+                return Ok(channel.id.clone().unwrap());
+            }
+            _ => {
+                return Err("channel id retrieval error".into())
+            }
+        }
+    }
+
+    async fn channel_name(hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let name_request = hub.channels().list(&vec!["snippet".to_string()]).mine(true).doit().await.expect("error when retrieving channel id!");
+
+        // Extract the channel name from the response.
+        match name_request.1.items.unwrap().first() {
+            Some(channel) => {
+                return Ok(channel.snippet.as_ref().unwrap().title.clone().unwrap());
+            }
+            _ => {
+                return Err("channel name retrieval error".into())
+            }
+        }
     }        
 }
 
-/*
-pub async fn multiple_uploads(
-        dir_path: &Path, 
-        hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-
-        
-        // collect a list of all files in the directory
-        let files: Vec<_> = fs::read_dir(dir_path)?
-        .filter_map(Result::ok)
-        .filter(|entry| entry.path().is_file())
-        .collect();
-
-        // run the upload tasks concurrently
-        let mut upload_tasks = files.into_iter().map(|entry| {
-            let file_path = entry.path();
-            let hub = hub.clone();
-
-            // encode the file
-            let file = FileInfo::new(&file_path);
-            let output = Encode::encoder(Encode::new(file.clone(), (1280, 720), 4, 4));
-            
-            tokio::spawn(async move {
-
-                // create an Mp4 instance from the encoded file
-                let mp4 = Mp4::new(Path::new(&output), file.clone().name(), file.clone().datatype(), file.clone().size().try_into().unwrap());
-
-                let result = Self::upload(mp4, &hub).await;
-                match result {
-                    Ok(video_id) => {
-                        println!("Video uploaded: https://www.youtube.com/watch?v={}", video_id);
-                    }
-                    Err(error) => {
-                        eprintln!("Error uploading video: {:?}", error.to_string());
-                    }
-                }
-            })
-        });
-
-        // wait for all tasks to complete
-        while let Some(task) = upload_tasks.next() {
-            task.await?;
-        }
-
-        Ok(())
-    }
-
-    pub async fn multiple_uploads2<'a>(
-        path: &Path,
-        hub: &'a mut YouTube<hyper_rustls::HttpsConnector<HttpConnector>>,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-
-        
-        //let mut tasks = Vec::new();
-
-        let cut_path = Path::new(path.file_name().unwrap());
-    
-        let mut playlist_map: HashMap<(PathBuf, String), Vec<PathBuf>> = HashMap::new(); // keep track of playlists and their parent directories
-        let mut files: Vec<_> = Vec::new();
-
-        // collect a list of all files in the directory and its subdirectories 
-        for entry in WalkDir::new(&cut_path) {
-            let entry = entry?;
-            if entry.path().is_file() {
-                files.push(entry);
-            } else if entry.path().is_dir() {
-                //let playlist_name = entry.file_name().to_string_lossy().to_string();
-                let parent_path = entry.path().strip_prefix(&cut_path).unwrap().parent().map_or_else(|| String::from(""), |p| p.to_string_lossy().to_string());
-                playlist_map.insert((entry.path().strip_prefix(&cut_path).unwrap().to_path_buf(), parent_path), Vec::new());
-            }
-        }
-
-        // add each file to the appropriate playlist
-        for entry in files {
-            let file_path = entry.path().strip_prefix(&cut_path).unwrap();
-            let dir_name = file_path.parent().map_or_else(|| "".into(), |p| p.to_path_buf());
-
-            println!("{:?}",  &dir_name);
-            println!("{:?}",  &dir_name.to_string_lossy().to_string());
-            let parent_path = dir_name.parent().and_then(|p| p.file_name()).map_or("".to_string(), |n| n.to_string_lossy().to_string());
-            if let Some(playlist) = playlist_map.get_mut(&(dir_name.clone(), parent_path)) {
-                 playlist.push(file_path.to_path_buf());
-            }
-        }
-        
-        //run the upload tasks and playlist creation tasks concurrently
-        let mut tasks = Vec::new();
-        for ((playlist_name, parent_path), playlist_files) in playlist_map {
-            if !playlist_files.is_empty() {
-                let path = cut_path.clone().to_path_buf();
-                let hub = hub.clone(); // clone the hub to move into the closure
-                tasks.push(tokio::spawn( async move {
-
-                    let mut playlist_id = "".to_string();
-                    if !playlist_name.to_string_lossy().to_string().is_empty() {
-                        playlist_id = Api::create_playlist(&hub, playlist_name, parent_path, "public").await.unwrap();
-                        println!("Playlist created: https://www.youtube.com/playlist?list={:?}", playlist_id);
-                    }
-
-                    for file_path in playlist_files {
-                        let file = FileInfo::new(&path.join(&file_path));
-                        let encoder = Encode::new(file.clone(), (1280, 720), 4, 4);
-                        let mp4_path = Encode::encoder(encoder);
-                        let mp4 = Mp4::new(Path::new(&mp4_path), file.clone().name(), file.clone().datatype(), file.clone().size().try_into().unwrap());
-                        let video_id = Api::upload(mp4, &hub).await.expect("upload video error");
-                        println!("Video uploaded: https://www.youtube.com/watch?v={:?}", video_id);
-                        if !playlist_id.is_empty() {
-                            Api::add_to_playlist(&video_id, &playlist_id, &hub).await.expect("error when adding to playlist");
-                            println!("Video added to playlist: https://www.youtube.com/playlist?list={:?}", playlist_id);
-                        }
-                    }
-                }));
-            }
-        }
-
-        // wait for all tasks to complete
-        for task in tasks {
-            task.await?;
-        }
-    
-        Ok(())
-    }
- */
