@@ -10,13 +10,14 @@ mod backend {
 #[tokio::main]
 async fn main() {
 
-//     let api = backend::youtubeapi::Api::new("../client_secret.json").await;
 
-//     let user = backend::youtubeapi::User::new("../client_secret.json").await;
+    let user = backend::youtubeapi::User::new("../client_secret.json").await;
 
-//     backend::youtubeapi::Api::search(&user.api.hub()).await;
+    user.upload("path/to/file.txt").await;
 
-//     backend::youtubeapi::Api::upload("input/alpha.txt", &api.hub()).await.expect("failed uploads");
+    let map = user.search_directory("path/to/file.txt").await;
 
-//     backend::youtubeapi::Api::download("A79UdIx9aL8", "output", &api.hub()).await;
-}
+    let video_id = map.get("file").expect("video doesnt exist in the searched directory");
+
+    user.download(&video_id, "path/to/folder").await;
+}  

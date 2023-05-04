@@ -180,7 +180,7 @@ impl User {
 impl User {
     // Methods that handles the upload and download operations 
 
-    pub async fn upload(self, file_path: &str) {
+    pub async fn upload(&self, file_path: &str) {
         let result = Api::upload(file_path, &self.api.hub()).await;
 
         match result {
@@ -189,7 +189,7 @@ impl User {
         }
     }
 
-    pub async fn download(self, video_id: &str, output_folder: &str)  {
+    pub async fn download(&self, video_id: &str, output_folder: &str)  {
         let result = Api::download(video_id, output_folder, &self.api.hub()).await;
 
         match result {
@@ -517,7 +517,7 @@ impl Api {
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     ///     let api = backend::youtubeapi::Api::new("my_api_key").await; 
-    ///     backend::youtubeapi::Api::upload("path/to/my_file.txt", &mut api.hub()).await.expect("failed uploads");
+    ///     backend::youtubeapi::Api::upload("path/to/my_file.txt", &mut api.hub()).await.expect("failed upload");
     ///     Ok(())
     /// }
     /// ```
