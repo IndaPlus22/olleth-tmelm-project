@@ -321,6 +321,8 @@ struct Api {
 }
 
 impl Api {
+    //Methods that deal with Api struct handling
+
     /// Constructs a new `Api` with an authenticated Youtube Data API v3 client.
     ///
     /// # Arguments
@@ -389,6 +391,10 @@ impl Api {
             format!("{:.2} GB", bytes as f64 / GB)
         }
     }
+}
+
+impl Api {
+    //Methods that deal with search requests
 
     /// Searches for videos on YouTube based on a query and returns a hashmap of the video titles and ids.
     ///
@@ -442,6 +448,10 @@ impl Api {
         };
         video_map
     }
+}
+
+impl Api {
+    //Methods that deal with uploading and downloading videos
 
     /// This function uploads a video to YouTube and returns the video ID on success, or an error on failure.
     ///
@@ -453,7 +463,7 @@ impl Api {
     /// # Returns
     ///
     /// A `Result` containing the video ID on success, or an error on failure.
-    async fn upload_function(mp4: Mp4, hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn video_upload(mp4: Mp4, hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
 
 
         // create a new video
@@ -525,7 +535,7 @@ impl Api {
         // create an Mp4 instance from the encoded file
         let mp4 = Mp4::new(Path::new(&output), file.clone().name(), file.clone().datatype(), file.clone().size().try_into().unwrap());
 
-        let result = Self::upload_function(mp4, &hub).await;
+        let result = Api::video_upload(mp4, &hub).await;
             match result {
                 Ok(_res) => {
                     return Ok(());
@@ -557,7 +567,7 @@ impl Api {
     ///     backend::youtubeapi::Api::download(video_id, output_folder, &api.hub());
     /// }
     /// ```
-    pub async fn download(video_id: &str, output_folder: &str, hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn download(video_id: &str, output_folder: &str, hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         // Construct the URL of the video
         let url = format!("https://www.youtube.com/watch?v={}", video_id);
         let mut title = video_id.to_string();
@@ -596,8 +606,10 @@ impl Api {
            false => return Err("failed to download!".to_string().into()),
         }
     }
-    
-    ///
+}
+
+impl Api {
+     ///
     /// # Arguments
     ///
     /// * `video_id` - A string slice representing the ID of the YouTube video to add to the playlist.
@@ -612,7 +624,7 @@ impl Api {
     ///
     /// Returns a `Box<dyn std::error::Error + Send + Sync>` if the API request fails.
     ///
-    pub async fn add_to_playlist(
+    async fn add_to_playlist(
         video_id: &str,
         playlist_id: &str,
         hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>,
@@ -650,7 +662,7 @@ impl Api {
     /// If the operation was successful, the `Video` struct contains information about the removed video.
     /// If an error occurred, the `Box<dyn std::error::Error + Send + Sync>` error is returned.
     ///
-    pub async fn remove_from_playlist(
+    async fn remove_from_playlist(
         video_id: &str,
         playlistitem_id: &str,
         hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>,
@@ -682,7 +694,7 @@ impl Api {
     /// If the operation was successful, the string contains the ID of the newly created playlist.
     /// If an error occurred, the `Box<dyn std::error::Error + Send + Sync>` error is returned.
     ///
-    pub async fn create_playlist(
+    async fn create_playlist(
         hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>,
         name: &str,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
@@ -710,7 +722,9 @@ impl Api {
             None => Err("Failed to create playlist".into())
         }
     }
+}
 
+impl Api {
     async fn channel_id(hub: &YouTube<hyper_rustls::HttpsConnector<HttpConnector>>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let id_request = hub.channels().list(&vec!["id".to_string()]).mine(true).doit().await.expect("error when retrieving channel id!");
 
