@@ -9,10 +9,6 @@ use rayon::prelude::*;
 
 use crate::backend::file::FileInfo;
 
-
-
-
-
 ///A struct holding the essential parts to the encoder such as file, res and pixel size.
 pub struct Encode {
     file: FileInfo,

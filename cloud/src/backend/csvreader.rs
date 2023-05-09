@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::{self, File};
-use std::io::{BufReader, ErrorKind, Write};
+use std::io::{BufReader, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use csv::{ReaderBuilder, WriterBuilder};
-use hyper::http::Extensions;
+
 
 
 
