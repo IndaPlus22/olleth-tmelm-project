@@ -1,9 +1,13 @@
 use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow, Button, FileChooserNative, ResponseType, Box, Entry, SearchEntry, ComboBoxText,
 ListBox, Label, ListBoxRow};
-//use youtube_api::Api;
-//static api = Api::new("/path/to/client_secret.json").unwrap();
-//let youtube = api.get_hub();
+
+use youtube_api::User;
+use csvreader;
+
+let clients = csvreader::create_client_secret_csv("clientsecrets").unwrap();
+
+let mut user = User::new(clients.to_str().unwrap());
 
 fn main() {
     // Create a new application
@@ -130,7 +134,8 @@ fn build_ui(app: &Application) {
             if response == ResponseType::Accept {
                 let file_path = dialog.file().unwrap().path().unwrap();
                 println!("File path: {:?}", file_path); //debug
-                //Api::upload(file_path, &youtube).unwrap();
+                user.upload(file_path).await;
+                
             }
             dialog.destroy();
         });

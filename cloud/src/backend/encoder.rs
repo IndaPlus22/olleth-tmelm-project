@@ -59,7 +59,7 @@ impl Encode {
         let title = &format!("title={}", FileInfo::name(&encode.file));
         let datatype = &format!("author={}", FileInfo::datatype(&encode.file));
         let date = &format!("time={}", FileInfo::date(&encode.file));
-        let output = &format!("{}.mp4", FileInfo::name(&encode.file));
+        let output = &format!("test.mp4");
     
         // Convert the frames to an MP4 video using FFmpeg
         let ffmpeg = Command::new("ffmpeg")
@@ -78,10 +78,7 @@ impl Encode {
                 "-bufsize", "1000M",
                 "-movflags", "+faststart",
                 "-map_metadata", "0",
-                "-metadata",  title,
-                "-metadata", datatype,
-                "-metadata", date,
-                output,
+                "test.mp4",
             ])
             .stdin(std::process::Stdio::piped())
             .spawn()

@@ -18,6 +18,7 @@ use crate::backend::encoder::Encode;
 use crate::backend::file::FileInfo;
 use crate::backend::csvreader;
 
+#[derive(Clone)]
 pub struct User {
     pub id: String,
     pub name: String,
@@ -25,6 +26,7 @@ pub struct User {
     directory: HashMap<String, DirectoryEntry>,
 }
 
+#[derive(Clone)]
 pub enum DirectoryEntry {
     Video(String),
     Playlist {
@@ -225,14 +227,16 @@ impl User {
 impl User {
     // Methods that handles the upload and download operations 
 
-    pub async fn upload(&mut self, file_path: &str) {
+    pub async fn upload(&mut self, file_path: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let result = Api::upload(file_path, &self.api.hub()).await;
         self.api.reduce_quota(1600);
 
-        match result {
-            Ok(_res) => println!("Complete upload!"),
-            Err(e) => println!("{}", e),
-        }
+        result
+
+        // match result {
+        //     Ok(_res) => println!("Complete upload!"),
+        //     Err(e) => println!("{}", e),
+        // }
     }
 
     pub async fn download(&self, video_id: &str, output_folder: &str)  {
@@ -432,6 +436,7 @@ impl Mp4 {
 }
 
 /// A struct containing Youtube API3 client data.
+#[derive(Clone)]
 struct Api {
     hub: YouTube<hyper_rustls::HttpsConnector<HttpConnector>>,
     client: String,
@@ -440,6 +445,7 @@ struct Api {
     expiration_time: OffsetDateTime,
     path: PathBuf,
 }
+
 
 impl Api {
     //Methods that deal with Api struct handling
