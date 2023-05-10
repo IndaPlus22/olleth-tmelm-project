@@ -1,20 +1,36 @@
-use std::path::Path;
 
 mod backend {
     pub mod encoder;
     pub mod file;
     pub mod youtubeapi;
+    pub mod csvreader;
 }
 
 
 #[tokio::main]
 async fn main() {
 
-    let api = backend::youtubeapi::Api::new("../client_secret.json").await; 
+    let clients = backend::csvreader::create_client_secret_csv("client_secrets").unwrap();
 
-    backend::youtubeapi::Api::search("A79UdIx9aL8", &api.hub()).await;
+    let mut user = backend::youtubeapi::User::new(clients.to_str().unwrap()).await;
 
-    backend::youtubeapi::Api::upload("input/alpha.txt", &api.hub()).await.expect("failed uploads");
 
-    backend::youtubeapi::Api::download("A79UdIx9aL8", "output", &api.hub()).await;
-}
+    // println!("id: {}", user.id);
+    // println!("name: {}", user.name);
+
+    //user.directory_display().await;
+
+    // user.upload("input/beta.txt").await;
+
+    // user.update_directory().await;
+
+    // println!("_________________________________");
+
+    // user.directory_display().await;
+
+    // let video_id = map.get("file").expect("video doesnt exist in the searched directory");
+
+    // user.download(&video_id, "path/to/folder").await;
+
+    //backend::encoder::decoder(std::path::Path::new("output/test.txt.mp4").to_path_buf());
+}  
