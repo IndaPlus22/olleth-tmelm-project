@@ -1,5 +1,5 @@
 
-# Minimum Viable Product (MVP) for Cloud Storage Program
+# Minimum Viable Product (MVP) for YCloud
 
 The MVP for the cloud storage program should include the following features:
 
@@ -24,6 +24,7 @@ See External programs on how to install:
 - Rust programming language
 - ffmpeg
 - yt-dlp
+- tauri
 
 ## Steps
 1. Clone the GitHub repository for the MVP.
@@ -32,9 +33,8 @@ See External programs on how to install:
 4. Install yt-dlp by following the instructions on the yt-dlp website.
 5. Create a Google Cloud Platform project and enable the YouTube Data API.
 6. Create a client ID and client secret for the YouTube Data API.
-7. Save the client ID and client secret in a file named client_secret.json in the root directory of the MVP repository.
-8. Build the MVP by running cargo build in the root directory of the MVP repository.
-9. Run the MVP by running cargo run in the root directory of the MVP repository.
+7. download the client secret in a file and put it inside the secrets folder of the MVP repository.
+8. Build and run the MVP by running cargo tauri dev in the root directory of the MVP repository.
 
 # Next Steps
 Once the MVP is complete, there are several potential features that could be added to the program, such as:
@@ -86,6 +86,15 @@ In the cloud storage program, FFmpeg is used to convert the audio and video stre
 **Linux**
 
 FFmpeg can be installed on most Linux distributions through the package manager. For example, on Ubuntu and Debian-based systems, open a Terminal window and enter the following command: `sudo apt install ffmpeg`.
+
+## Tauri
+
+### Requirements
+Visual Studio Build Tools 2022 with c++ development
+
+### Installation
+1. cargo install create-tauri-app
+2. cargo install tauri-cli
 
 # API functions
 The Api struct provides a high-level interface to the YouTube Data API v3, allowing users to authenticate with Google and perform operations such as uploading, downloading and searching for videos. The struct has the following public functions:
