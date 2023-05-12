@@ -24,7 +24,7 @@ See External programs on how to install:
 - Rust programming language
 - ffmpeg
 - yt-dlp
--~~gtk4~~
+- ~~gtk4~~
 
 ## Steps
 1. Clone the GitHub repository for the MVP.
