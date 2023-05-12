@@ -32,8 +32,8 @@ See External programs on how to install:
 3. Install ffmpeg by following the instructions on the ffmpeg website.
 4. Install yt-dlp by following the instructions on the yt-dlp website.
 5. Create a Google Cloud Platform project and enable the YouTube Data API.
-6. Create a client ID and client secret for the YouTube Data API.
-7. download the client secret in a file and put it inside the secrets folder of the MVP repository.
+6. Create credentials for the YouTube Data API.
+7. download the client secret file from credentials and put it inside the secrets folder of the MVP repository.
 8. Build and run the MVP by running cargo tauri dev in the root directory of the MVP repository.
 
 # Next Steps
